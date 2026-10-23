@@ -36,6 +36,8 @@ body.operator {
 .o-theme:active { transform: scale(.97); }
 .o-theme[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 3px var(--primary); }
 .o-theme[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 8px; right: 10px; width: 24px; height: 24px; border-radius: 50%; background: #fff; color: #111; display: grid; place-items: center; font-weight: 900; font-size: 14px; }
+.o-theme-cat { grid-column: 1 / -1; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.o-theme-cat:first-child { margin-top: 0; }
 .o-theme-emoji { font-size: 28px; line-height: 1; }
 .o-theme-name { font-weight: 800; font-size: 15px; line-height: 1.15; }
 .o-theme-tag { font-size: 12px; opacity: .8; }
@@ -139,6 +141,7 @@ body[data-stage="photo-done"][data-view="video"] #stage-video { display: block; 
 .o-field-hint { font-size: 13px; color: var(--muted); line-height: 1.4; }
 .o-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .o-chip { border: 1px solid var(--line); background: var(--bg); color: var(--muted); border-radius: 99px; padding: 8px 14px; font: 600 14px var(--font); cursor: pointer; }
+.o-chip-cat { flex-basis: 100%; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .o-chip[aria-pressed="true"] { background: var(--panel-2); color: var(--text); border-color: var(--primary); }
 .o-samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
 .o-sample { aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center; }
@@ -149,6 +152,7 @@ body[data-stage="photo-done"][data-view="video"] #stage-video { display: block; 
 @media (max-width: 900px) {
   .o-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .o-theme-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 150px; overflow-x: auto; overflow-y: hidden; }
+  .o-theme-cat { display: none; }
   .o-prompt { display: none; }
   body.custom-theme .o-prompt { display: grid; }
   .o-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); }

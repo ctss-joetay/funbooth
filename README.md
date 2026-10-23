@@ -6,10 +6,15 @@ through themes with sample pictures, pick one and strike a pose. The AI (ByteDan
 gets a free **before/after GIF**, and the operator can turn any photo into a short
 **AI video clip**. Only the operator can print or send photos, GIFs and clips to guests.
 
-**Themes included:** Winter Wonderland · Holidays in the Sun · Mountain Adventure ·
-Kawaii Harajuku · Classroom Days · Music Festival · Totally 80s · 90s Throwback ·
-Y2K 2000s · Red Carpet · Fashion Shoot · Black & White Studio · Custom (operator types
-any scene). Every theme works as a **🧍 Full body** shot or a **🙂 Face only** close-up.
+**26 themes in four groups** (tabs on the guest carousel), plus Custom where the operator
+types any scene. Every theme works as a **🧍 Full body** shot or a **🙂 Face only** close-up.
+
+| Group | Themes |
+|---|---|
+| 🌍 Places | Winter Wonderland · Holidays in the Sun · Mountain Adventure · Paris Getaway · Tokyo Nights · New York City · Safari Adventure · Gardens by the Bay |
+| 🦸 Dress up | Space Explorers · Superheroes · Sports Champions · K-pop Stage · Red Carpet · Music Festival · Classroom Days |
+| 📼 Eras & styles | 70s Disco · Totally 80s · 90s Throwback · Y2K 2000s · Wild West · Cyberpunk City · Kawaii Harajuku |
+| 📸 Portraits | Fashion Shoot · Black & White Studio · Golden Hour Portrait · Polaroid Party |
 
 ## Three booth modes
 
@@ -43,7 +48,8 @@ in one-iPad mode, can print or send.
 
 ## How a photo is taken
 
-1. **Choose:** guests swipe the theme carousel on the guest screen and tap a theme.
+1. **Choose:** guests swipe the theme carousel on the guest screen (or tap a group tab
+   such as 🌍 Places) and tap a theme.
    The operator decides which themes appear and can add sample pictures (see below).
 2. **Pose:** the guest screen shows the live camera. Guests choose **🧍 Full body** or
    **🙂 Face only** (the operator can switch it too, under the themes), then a guest taps
@@ -127,7 +133,7 @@ theme, using the same prompts the booth uses. To
 replace them:
 - **⭐ Use as theme sample:** on any finished photo in the operator view.
 - **Settings → Make samples for every theme from the selected photo:** restyles one
-  good shot (e.g. your team) in every theme. This is one AI image per theme, 12 in total.
+  good shot (e.g. your team) in every theme. This is one AI image per theme, 26 in total.
 - **Regenerate the built-in set:** run `OPENROUTER_API_KEY=... python scripts/make_samples.py`.
   It creates a new demo group and restyles it in every theme. Add `--photo team.jpg`
   to use your own photo, and set `OPENROUTER_RESOLUTION=1K` to keep it cheap. Commit
@@ -251,8 +257,10 @@ Themes live in [`app/themes.py`](app/themes.py). Each one has:
 - the scene prompt, plus a motion line for video clips
 - three print-frame colours
 - `place`: the theme moves people somewhere else, so the place-integration rules apply
+- `category`: its group on the guest carousel's tabs and in the operator's theme list
 
-Add an entry, redeploy, and it appears on the operator screen and the guest carousel.
+Add an entry, redeploy, and it appears on the operator screen and the guest carousel
+(new themes also start out ticked under **Themes guests can choose** on existing booths).
 Framing (full body or face only) isn't part of a theme: it's added by `build_prompt`.
 To narrow the list for an event (e.g. only the travel themes), use **Settings →
 Themes guests can choose**. For one-off ideas the operator can pick **Custom**, or type
@@ -262,8 +270,8 @@ extra details (e.g. "add a birthday cake") under any theme.
 
 OpenRouter listed Seedream 5.0 Flash from about **$0.018 per image** when this was
 written. Check the model page for current pricing and for any surcharge on 2K output.
-Each **Restyle** is another generation. **Make samples** creates one per theme (12 in
-total), and the **Test AI connection** button makes one.
+Each **Restyle** is another generation. **Make samples** creates one per theme (26 in
+total, roughly $0.50–1), and the **Test AI connection** button makes one.
 
 Video clips cost more: about **$0.13** for a 5-second 720p clip with Seedance 1.5 Pro
 (measured), or $0.06 at 480p. The operator caption shows each clip's actual cost. The

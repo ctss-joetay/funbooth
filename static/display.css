@@ -56,6 +56,15 @@ body:not([data-screen="pose"]) .d-main { grid-row: 2 / 4; }
 .d-choose-head h1 { margin: 0; font-size: clamp(34px, 5vw, 56px); font-weight: 900; letter-spacing: -.02em; }
 .d-choose-head p { margin: 6px 0 0; font-size: clamp(17px, 2.2vw, 22px); opacity: .8; }
 
+.d-cats { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 16px; }
+.d-cats[hidden] { display: none; }
+.d-cats button {
+  min-height: 50px; padding: 0 20px; border: 0; border-radius: 99px; cursor: pointer;
+  background: color-mix(in srgb, var(--theme-ink) 14%, transparent); color: var(--theme-ink);
+  font: 700 clamp(16px, 1.8vw, 19px) var(--font);
+}
+.d-cats button[aria-pressed="true"] { background: #fff; color: #111; box-shadow: 0 6px 16px -8px rgba(0, 0, 0, .5); }
+
 .d-carousel-wrap { position: relative; margin: 0 calc(-1 * max(20px, env(safe-area-inset-left))); }
 .d-carousel {
   display: flex; gap: 22px; overflow-x: auto; overscroll-behavior-x: contain;

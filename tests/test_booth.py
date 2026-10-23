@@ -15,7 +15,7 @@ from app.ai import AIError, ImageAI
 from app.reveal import make_reveal_gif
 from app.video import VideoAI
 from app.booth import GUEST_THEME_IDS, Prefs
-from app.config import DEFAULT_MODEL, Settings
+from app.config import DEFAULT_MODEL, STATIC_DIR, Settings
 from app.main import create_app
 from app.printing import compose_print
 from app.themes import FACE_FRAMING, FACE_FRAMING_END, FULL_BODY_FRAMING, IDENTITY_GUARD, PLACE_INTEGRATION, REALISM, THEMES, build_prompt, get_theme
@@ -69,9 +69,20 @@ def test_prompts_lock_faces_and_fit_the_place():
     custom = build_prompt(get_theme("custom"), "a pirate ship deck")
     assert custom == IDENTITY_GUARD + FULL_BODY_FRAMING + "a pirate ship deck" + REALISM
     ids = {t.id for t in THEMES}
-    assert {"fashion", "noir", "mountains", "kawaii", "classroom"} <= ids
+    assert {"fashion", "noir", "mountains", "kawaii", "classroom", "paris", "space", "polaroid"} <= ids
     assert not {"lunar", "lights", "xmas"} & ids  # religious festivals are off for now
     assert get_theme("xmas").id == "winter"  # old saved prefs fall back safely
+
+
+def test_every_theme_is_complete():
+    assert len({t.id for t in THEMES}) == len(THEMES)
+    for theme in THEMES:
+        assert theme.category and theme.prompt.startswith("Scene:") and theme.motion, theme.id
+        assert (STATIC_DIR / "samples" / f"{theme.id}.jpg").exists(), f"no built-in sample for {theme.id}"
+    # Each group's themes sit together, so the guest carousel and operator list read in order.
+    groups = list(dict.fromkeys(t.category for t in THEMES))
+    assert [t.category for t in THEMES] == sorted((t.category for t in THEMES), key=groups.index)
+    assert len(groups) == 4
 
 
 # -- OpenRouter client -------------------------------------------------------------------

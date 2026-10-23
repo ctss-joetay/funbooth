@@ -412,7 +412,7 @@ class Booth:
             return
         self._making_samples = True
         await self.broadcast_state()
-        await self.notify_operators(f"Making samples for {len(THEMES)} themes. This takes a minute or two…")
+        await self.notify_operators(f"Making samples for {len(THEMES)} themes. This takes a few minutes…")
         self._spawn(self._make_samples(rec))
 
     async def _make_samples(self, rec: PhotoRecord) -> None:

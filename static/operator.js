@@ -113,10 +113,22 @@ const selected = () => (selectedId ? gallery.get(selectedId) : null);
 
 // -- themes -----------------------------------------------------------------------------
 
+/** Insert a group heading before the first theme of each category. */
+function groupHeading(box, theme, last, className) {
+  if (theme.category === last) return last;
+  const heading = document.createElement("div");
+  heading.className = className;
+  heading.textContent = theme.category;
+  box.append(heading);
+  return theme.category;
+}
+
 function buildThemeGrid() {
   const grid = $("#theme-grid");
   grid.innerHTML = "";
+  let group = null;
   for (const theme of Object.values(themes)) {
+    group = groupHeading(grid, theme, group, "o-theme-cat");
     const colors = theme.id === "custom" ? CUSTOM_COLORS : theme;
     const btn = document.createElement("button");
     btn.className = "o-theme";
@@ -507,8 +519,10 @@ $("#open-settings").addEventListener("click", () => {
 
 function buildGuestThemeChips() {
   const box = $("#guest-themes");
+  let group = null;
   for (const theme of Object.values(themes)) {
     if (theme.id === "custom") continue;
+    group = groupHeading(box, theme, group, "o-chip-cat");
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "o-chip";

@@ -39,6 +39,7 @@ let countdownTimer = null;
 let procTimer = null;
 let lastTouch = Date.now();
 let carouselKey = "";
+let category = ""; // carousel tab: "" shows every theme
 let wantPreview = false;
 let localQr = null; // photo whose QR the host chose to show from this iPad
 let dismissedQr = null;
@@ -252,7 +253,9 @@ function guestThemes(prefs) {
 }
 
 function renderCarousel(prefs) {
-  const list = guestThemes(prefs);
+  const all = guestThemes(prefs);
+  renderCategories(all);
+  const list = category ? all.filter((t) => t.category === category) : all;
   const key = JSON.stringify([list.map((t) => t.id), list.map((t) => state.samples[t.id])]);
   if (key !== carouselKey) {
     carouselKey = key;
@@ -261,6 +264,35 @@ function renderCarousel(prefs) {
     updateArrows();
   }
   $$(".d-card", els.carousel).forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.id === prefs.theme_id)));
+}
+
+/** Tabs above the carousel, one per theme group, shown when there's more than one group. */
+function renderCategories(list) {
+  const groups = [...new Set(list.map((t) => t.category).filter(Boolean))];
+  if (!groups.includes(category)) category = "";
+  const box = $("#cats");
+  const key = JSON.stringify(groups);
+  if (box.dataset.key !== key) {
+    box.dataset.key = key;
+    box.innerHTML = "";
+    for (const group of ["", ...groups]) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.cat = group;
+      btn.textContent = group || "✨ All";
+      btn.addEventListener("click", () => showCategory(group));
+      box.append(btn);
+    }
+  }
+  box.hidden = groups.length < 2;
+  $$("button", box).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cat === category)));
+}
+
+function showCategory(group) {
+  category = group;
+  render();
+  els.carousel.scrollLeft = 0;
+  updateArrows();
 }
 
 function themeCard(theme) {
@@ -337,9 +369,11 @@ setInterval(() => {
   const idle = Date.now() - lastTouch;
   if (state.phase === "idle" && view === "pose" && idle > POSE_TIMEOUT) {
     view = "choose";
+    category = "";
     render();
   } else if (state.phase === "result" && idle > RESULT_TIMEOUT) {
     lastTouch = Date.now();
+    category = "";
     clearResult("choose");
   }
 }, 5000);
