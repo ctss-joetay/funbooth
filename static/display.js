@@ -2,7 +2,7 @@ import {
   $, $$, Camera, PreviewStreamer, RemotePreview, Sharer, api, applyThemeColors, askPin, aspectFor,
   connect, ensurePin, forgetPin, getPin, keepAwake, loadThemes, printPhoto, shareEntries, store, toast,
   uploadPhoto,
-} from "/static/common.js";
+} from "./common.js";
 
 const FACING_KEY = "funbooth.display.facing";
 const POSE_TIMEOUT = 60_000; // back to the theme carousel if nobody shoots

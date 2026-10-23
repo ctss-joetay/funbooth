@@ -6,6 +6,7 @@ Run locally:  uvicorn app.main:create_app --factory --reload
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import html
 import io
@@ -47,6 +48,17 @@ def _timezone() -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
+def _build_id() -> str:
+    """Fingerprint of the static files. Each deploy gets new asset URLs, so iPads never mix a
+    fresh page with a stylesheet or script cached from an older deploy."""
+    digest = hashlib.sha1()
+    for path in sorted(STATIC_DIR.rglob("*")):
+        if path.is_file():
+            digest.update(str(path.relative_to(STATIC_DIR)).encode())
+            digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
+
+
 def create_app(settings: Settings | None = None, ai: ImageAI | None = None, video_ai: VideoAI | None = None) -> FastAPI:
     settings = settings or load_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
@@ -63,6 +75,20 @@ def create_app(settings: Settings | None = None, ai: ImageAI | None = None, vide
     app = FastAPI(title="Fun Booth", lifespan=lifespan, docs_url=None, redoc_url=None)
     app.state.booth = booth
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    build = _build_id()
+    revalidate = {"Cache-Control": "no-cache"}
+    immutable = {"Cache-Control": "public, max-age=31536000, immutable"}
+
+    @app.middleware("http")
+    async def revalidate_static(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
+    def render_page(name: str) -> str:
+        """An HTML page with its /static/ links pointing at this build's versioned URLs."""
+        return (STATIC_DIR / name).read_text().replace('"/static/', f'"/v/{build}/')
 
     def pin_ok(pin: str) -> bool:
         return hmac.compare_digest(pin.encode(), settings.booth_pin.encode())
@@ -84,19 +110,27 @@ def create_app(settings: Settings | None = None, ai: ImageAI | None = None, vide
 
     @app.get("/", include_in_schema=False)
     async def index():
-        return FileResponse(STATIC_DIR / "index.html")
+        return HTMLResponse(render_page("index.html"), headers=revalidate)
 
     @app.get("/operator", include_in_schema=False)
     async def operator_page():
-        return FileResponse(STATIC_DIR / "operator.html")
+        return HTMLResponse(render_page("operator.html"), headers=revalidate)
 
     @app.get("/display", include_in_schema=False)
     async def display_page():
-        return FileResponse(STATIC_DIR / "display.html")
+        return HTMLResponse(render_page("display.html"), headers=revalidate)
 
     @app.get("/camera", include_in_schema=False)
     async def camera_page():
-        return FileResponse(STATIC_DIR / "camera.html")
+        return HTMLResponse(render_page("camera.html"), headers=revalidate)
+
+    @app.get("/v/{version}/{path:path}", include_in_schema=False)
+    async def versioned_static(version: str, path: str):
+        file = (STATIC_DIR / path).resolve()
+        if not file.is_relative_to(STATIC_DIR) or not file.is_file():
+            raise HTTPException(status_code=404)
+        # This build's URLs never change content; an old build's URL just revalidates.
+        return FileResponse(file, headers=immutable if version == build else revalidate)
 
     @app.get("/healthz")
     async def healthz():
@@ -210,7 +244,7 @@ def create_app(settings: Settings | None = None, ai: ImageAI | None = None, vide
     @app.get("/p/{photo_id}", response_class=HTMLResponse, include_in_schema=False)
     async def guest_page(photo_id: str):
         rec = get_photo(photo_id)
-        page = (STATIC_DIR / "guest.html").read_text()
+        page = render_page("guest.html")
         data = {
             "event_name": booth.prefs.event_name,
             "theme_name": get_theme(rec.theme_id).name,

@@ -1,7 +1,7 @@
 import {
   $, Camera, PreviewStreamer, aspectFor, connect, ensurePin, forgetPin, getPin, keepAwake, loadThemes,
   store, toast, uploadPhoto,
-} from "/static/common.js";
+} from "./common.js";
 
 const FACING_KEY = "funbooth.camera.facing";
 

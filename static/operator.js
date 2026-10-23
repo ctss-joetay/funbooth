@@ -1,7 +1,7 @@
 import {
   $, $$, Camera, PreviewStreamer, Sharer, api, aspectFor, connect, ensurePin, forgetPin, loadThemes,
   printPhoto, printUrlFor, shareEntries, store, toast, uploadPhoto,
-} from "/static/common.js";
+} from "./common.js";
 
 const FACING_KEY = "funbooth.operator.facing";
 const GUEST_SCREEN = {

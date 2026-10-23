@@ -2,6 +2,7 @@ import asyncio
 import base64
 import io
 import json
+import re
 from dataclasses import replace
 
 import httpx
@@ -532,6 +533,26 @@ def test_restart_recovers_interrupted_work(settings):
         pass
     assert store.get(rec.id).video_status == "error"
     assert store.get(stuck.id).status == "error"
+
+
+def test_pages_load_assets_from_versioned_urls(client):
+    """A new deploy must never be mixed with CSS/JS cached from an older one."""
+    page = client.get("/display")
+    assert page.headers["cache-control"] == "no-cache"
+    assert '"/static/display.css"' not in page.text
+    css = re.search(r'href="(/v/[0-9a-f]+/display\.css)"', page.text).group(1)
+    js = re.search(r'src="(/v/[0-9a-f]+/display\.js)"', page.text).group(1)
+    assert "immutable" in client.get(css).headers["cache-control"]
+    script = client.get(js)
+    assert "javascript" in script.headers["content-type"]
+    assert 'from "./common.js"' in script.text  # resolves inside the same version
+    assert client.get(js.replace("display.js", "common.js")).status_code == 200
+
+    assert client.get("/v/old/display.css").headers["cache-control"] == "no-cache"
+    assert client.get("/v/x/%2e%2e/%2e%2e/app/main.py").status_code == 404
+    assert client.get("/static/app.css").headers["cache-control"] == "no-cache"
+    for path in ("/", "/operator", "/camera"):
+        assert '"/static/' not in client.get(path).text
 
 
 def test_bad_uploads_and_unknown_photos(client):
