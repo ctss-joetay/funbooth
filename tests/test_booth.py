@@ -18,7 +18,7 @@ from app.booth import GUEST_THEME_IDS, Prefs
 from app.config import DEFAULT_MODEL, Settings
 from app.main import create_app
 from app.printing import compose_print
-from app.themes import FULL_BODY_FRAMING, IDENTITY_GUARD, KEEP_FRAMING, PLACE_INTEGRATION, REALISM, THEMES, build_prompt, get_theme
+from app.themes import FACE_FRAMING, FACE_FRAMING_END, FULL_BODY_FRAMING, IDENTITY_GUARD, PLACE_INTEGRATION, REALISM, THEMES, build_prompt, get_theme
 
 PIN = "1234"
 
@@ -58,14 +58,20 @@ def test_prompts_lock_faces_and_fit_the_place():
     assert FULL_BODY_FRAMING in winter and PLACE_INTEGRATION in winter
     assert "snowy pine forest" in winter and "Also: add a snowman" in winter
 
-    noir = build_prompt(get_theme("noir"))
-    assert KEEP_FRAMING in noir and FULL_BODY_FRAMING not in noir and PLACE_INTEGRATION not in noir
+    # Every theme works as a full-body shot or a face-only close-up.
+    noir = build_prompt(get_theme("noir"), framing="face")
+    assert FACE_FRAMING in noir and noir.endswith(FACE_FRAMING_END + REALISM)
+    assert FULL_BODY_FRAMING not in noir and PLACE_INTEGRATION not in noir
     assert "black and white" in noir
+    beach_close_up = build_prompt(get_theme("sun"), framing="face")
+    assert FACE_FRAMING in beach_close_up and PLACE_INTEGRATION in beach_close_up
 
     custom = build_prompt(get_theme("custom"), "a pirate ship deck")
-    assert custom == IDENTITY_GUARD + KEEP_FRAMING + "a pirate ship deck" + REALISM
-    assert {"fashion", "noir", "mountains"} <= {t.id for t in THEMES}
-    assert get_theme("does-not-exist").id == "winter"
+    assert custom == IDENTITY_GUARD + FULL_BODY_FRAMING + "a pirate ship deck" + REALISM
+    ids = {t.id for t in THEMES}
+    assert {"fashion", "noir", "mountains", "kawaii", "classroom"} <= ids
+    assert not {"lunar", "lights", "xmas"} & ids  # religious festivals are off for now
+    assert get_theme("xmas").id == "winter"  # old saved prefs fall back safely
 
 
 # -- OpenRouter client -------------------------------------------------------------------
@@ -329,7 +335,7 @@ def test_full_capture_flow(client):
         photo = receive_until(op, is_state(phase="result"))["photo"]
         assert photo["id"] == photo_id
         assert photo["status"] == "done"
-        assert photo["theme_id"] == "sun"
+        assert photo["theme_id"] == "sun" and photo["framing"] == "full"
         receive_until(disp, is_state(phase="result"))
 
         assert client.get(photo["result_url"]).headers["content-type"] == "image/jpeg"
@@ -344,11 +350,11 @@ def test_full_capture_flow(client):
         op.send_json({"type": "send_qr", "photo_id": photo_id})
         assert receive_until(disp, lambda m: m["type"] == "state" and m["qr"])["qr"]["id"] == photo_id
 
-        # Restyle the same photo with another theme.
-        op.send_json({"type": "prefs", "prefs": {"theme_id": "80s"}})
+        # Restyle the same photo with another theme, as a face-only close-up.
+        op.send_json({"type": "prefs", "prefs": {"theme_id": "80s", "framing": "face"}})
         op.send_json({"type": "regenerate", "photo_id": photo_id})
         again = receive_until(op, lambda m: m["type"] == "state" and m["phase"] == "result" and m["photo"]["version"] == 2)
-        assert again["photo"]["theme_id"] == "80s"
+        assert again["photo"]["theme_id"] == "80s" and again["photo"]["framing"] == "face"
 
         listed = client.get("/api/photos", headers=headers).json()
         assert [p["id"] for p in listed] == [photo_id]
@@ -407,17 +413,23 @@ def test_guests_choose_themes_but_cannot_run_the_booth(client):
         disp.send_json({"type": "theme", "theme_id": "90s"})
         receive_until(op, lambda m: m["type"] == "state" and m["prefs"]["theme_id"] == "90s")
 
-        op.send_json({"type": "prefs", "prefs": {"guest_themes": ["xmas", "winter", "not-a-theme"]}})
+        op.send_json({"type": "prefs", "prefs": {"guest_themes": ["kawaii", "winter", "not-a-theme"]}})
         state = receive_until(disp, lambda m: m["type"] == "state" and m["prefs"]["guest_themes"] != GUEST_THEME_IDS)
-        assert state["prefs"]["guest_themes"] == ["winter", "xmas"]  # catalogue order, unknown ids dropped
+        assert state["prefs"]["guest_themes"] == ["winter", "kawaii"]  # catalogue order, unknown ids dropped
 
         # Hidden themes, operator-only messages and prefs without the PIN are all ignored.
         disp.send_json({"type": "theme", "theme_id": "sun"})
         disp.send_json({"type": "prefs", "prefs": {"event_name": "hacked"}})
         disp.send_json({"type": "send_qr", "photo_id": "0" * 32})
-        disp.send_json({"type": "theme", "theme_id": "xmas"})
-        state = receive_until(disp, lambda m: m["type"] == "state" and m["prefs"]["theme_id"] == "xmas")
+        disp.send_json({"type": "framing", "framing": "everything"})
+        disp.send_json({"type": "theme", "theme_id": "kawaii"})
+        state = receive_until(disp, lambda m: m["type"] == "state" and m["prefs"]["theme_id"] == "kawaii")
         assert state["prefs"]["event_name"] == "Test Party"
+        assert state["prefs"]["framing"] == "full"
+
+        # Guests choose full body or face only for any theme.
+        disp.send_json({"type": "framing", "framing": "face"})
+        assert receive_until(disp, lambda m: m["type"] == "state" and m["prefs"]["framing"] == "face")
 
         # With the PIN (the host menu on a one-iPad booth) the guest screen can change settings.
         disp.send_json({"type": "prefs", "pin": PIN, "prefs": {"camera_source": "display"}})

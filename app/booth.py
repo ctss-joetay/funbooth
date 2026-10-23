@@ -4,7 +4,7 @@ Devices: the operator (iPad or laptop) runs the booth, the display iPad faces th
 and the photo is shot by whichever device is chosen as the camera: the operator device, the
 display itself, or a separate phone running the camera page.
 
-Flow: guests pick a theme and tap "Take my photo" (or the operator / camera taps the
+Flow: guests pick a theme and a framing (full body or face only) and tap "Take my photo" (or the operator / camera taps the
 shutter) -> server broadcasts a countdown -> the camera device uploads the frame -> the AI
 restyles it -> everyone gets the result. Only the operator can print or send photos.
 While guests pose, the camera device streams small JPEG preview frames that the server
@@ -27,7 +27,7 @@ from .ai import AIError, ImageAI
 from .config import STATIC_DIR, Settings
 from .printing import LAYOUTS, layout_for
 from .storage import PhotoRecord, PhotoStore, normalize_jpeg
-from .themes import CUSTOM_THEME, THEMES, build_prompt, build_video_prompt, get_theme
+from .themes import CUSTOM_THEME, FRAMINGS, THEMES, build_prompt, build_video_prompt, get_theme
 from .video import VideoAI
 
 log = logging.getLogger("funbooth.booth")
@@ -55,6 +55,7 @@ class Prefs:
     event_name: str = "Fun Booth"
     theme_id: str = THEMES[0].id
     custom_prompt: str = ""
+    framing: str = "full"  # full (head to toe) | face (head and shoulders), for every theme
     mode: str = "two_ipads"  # see MODES
     camera_source: str = "operator"  # which device shoots: operator | display | camera (phone)
     countdown: int = 3
@@ -70,6 +71,8 @@ class Prefs:
             self.theme_id = data["theme_id"]
         if "custom_prompt" in data:
             self.custom_prompt = str(data["custom_prompt"])[:600]
+        if data.get("framing") in FRAMINGS:
+            self.framing = data["framing"]
         if data.get("mode") in MODES:
             self.mode = data["mode"]
             self.camera_source = MODES[self.mode]
@@ -269,11 +272,17 @@ class Booth:
         return isinstance(pin, str) and hmac.compare_digest(pin.encode(), self.settings.booth_pin.encode())
 
     async def _handle_guest(self, client: Client, kind: str, msg: dict) -> None:
-        """Guests can pick a theme and run the camera, but never print or send photos."""
+        """Guests can pick a theme and framing and run the camera, but never print or send photos."""
         if kind == "theme":
             theme_id = msg.get("theme_id")
             if theme_id in self.prefs.guest_themes and theme_id != self.prefs.theme_id:
                 self.prefs.theme_id = theme_id
+                self._save_prefs()
+                await self.broadcast_state()
+        elif kind == "framing":
+            framing = msg.get("framing")
+            if framing in FRAMINGS and framing != self.prefs.framing:
+                self.prefs.framing = framing
                 self._save_prefs()
                 await self.broadcast_state()
         elif kind == "start" and self.phase in ("idle", "result", "error"):
@@ -332,7 +341,7 @@ class Booth:
         """A device uploaded a photo (camera capture or file). Raises ValueError if unreadable."""
         jpeg = await asyncio.to_thread(normalize_jpeg, image_bytes)
         p = self.prefs
-        rec = await asyncio.to_thread(self.store.create, jpeg, p.theme_id, p.custom_prompt, p.orientation)
+        rec = await asyncio.to_thread(self.store.create, jpeg, p.theme_id, p.custom_prompt, p.orientation, p.framing)
         self.current, self.qr_photo = rec, None
         self.phase, self.message = "processing", ""
         await self.broadcast_state()
@@ -348,7 +357,7 @@ class Booth:
             return
         if rec.status == "processing":
             return
-        rec.theme_id, rec.custom_prompt = self.prefs.theme_id, self.prefs.custom_prompt
+        rec.theme_id, rec.custom_prompt, rec.framing = self.prefs.theme_id, self.prefs.custom_prompt, self.prefs.framing
         rec.status, rec.error = "processing", ""
         rec.clear_video()  # the old clip shows the old theme
         self.store.save(rec)
@@ -407,7 +416,7 @@ class Booth:
         async def one(theme) -> None:
             try:
                 async with self._ai_slots:
-                    raw = await self.ai.transform(original, build_prompt(theme), ratio)
+                    raw = await self.ai.transform(original, build_prompt(theme, framing=rec.framing), ratio)
                 await asyncio.to_thread(self._save_sample, theme.id, raw)
                 await self.broadcast_state()
             except (AIError, ValueError) as exc:
@@ -426,7 +435,7 @@ class Booth:
 
     async def _generate(self, rec: PhotoRecord) -> None:
         theme = get_theme(rec.theme_id)
-        prompt = build_prompt(theme, rec.custom_prompt)
+        prompt = build_prompt(theme, rec.custom_prompt, rec.framing)
         ratio = layout_for(rec.orientation)["ai_ratio"]
         started = time.monotonic()
         try:

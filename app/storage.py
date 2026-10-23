@@ -26,6 +26,7 @@ class PhotoRecord:
     theme_id: str
     custom_prompt: str
     orientation: str
+    framing: str = "full"  # full | face (see themes.FRAMINGS)
     status: str = "processing"  # processing | done | error
     error: str = ""
     version: int = 0  # bumped on every (re)generation so browsers refetch
@@ -87,13 +88,16 @@ class PhotoStore:
     def file(self, photo_id: str, name: str) -> Path:
         return self._dir(photo_id) / name
 
-    def create(self, original_jpeg: bytes, theme_id: str, custom_prompt: str, orientation: str) -> PhotoRecord:
+    def create(
+        self, original_jpeg: bytes, theme_id: str, custom_prompt: str, orientation: str, framing: str = "full"
+    ) -> PhotoRecord:
         rec = PhotoRecord(
             id=uuid.uuid4().hex,
             created_at=time.time(),
             theme_id=theme_id,
             custom_prompt=custom_prompt,
             orientation=orientation,
+            framing=framing,
         )
         self._dir(rec.id).mkdir(parents=True)
         self.path(rec.id, "original").write_bytes(original_jpeg)

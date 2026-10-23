@@ -159,12 +159,11 @@ function render() {
   $("#attract-emoji").textContent = theme.emoji || "📸";
   $("#attract-title").textContent = name || "Fun Booth";
   $("#attract-tag").textContent = attractText(cameraHere);
-  // Far-away places only look real with everyone in shot head to toe.
-  const fullBody = !!theme.full_body && (screen === "pose" || screen === "countdown");
-  $("#guide").hidden = !fullBody || !(camera.stream || els.body.classList.contains("has-remote"));
-  $("#banner").textContent = theme.full_body
-    ? "Step back: head to toe in the shot 👟"
-    : cameraHere ? "Strike a pose! 📸" : "Look at the camera! 📸";
+  // Every theme works full body (step back, head to toe) or face only (come close).
+  const fullBody = prefs.framing !== "face";
+  $$("#framing button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === prefs.framing)));
+  $("#guide").hidden = !(fullBody && live) || !(camera.stream || els.body.classList.contains("has-remote"));
+  $("#banner").textContent = fullBody ? "Step back: head to toe in the shot 👟" : "Come close: faces fill the frame 🙂";
   els.shoot.disabled = !state.camera_id;
   $("#shoot-label").textContent = state.camera_id ? "Take my photo!" : "Waiting for the camera…";
 
@@ -282,7 +281,6 @@ function themeCard(theme) {
     imgBox.innerHTML = `<div class="d-card-art"><span></span></div>`;
     imgBox.querySelector("span").textContent = theme.emoji;
   }
-  if (theme.full_body) imgBox.insertAdjacentHTML("beforeend", `<span class="fb-badge">👟 Full body</span>`);
   card.querySelector(".d-card-name").textContent = `${theme.emoji} ${theme.id === "custom" ? "Something special" : theme.name}`;
   card.querySelector(".d-card-tag").textContent = theme.tagline;
   card.addEventListener("click", () => pickTheme(theme.id));
@@ -311,6 +309,14 @@ $("#next").addEventListener("click", () => els.carousel.scrollBy({ left: els.car
 // -- guest buttons ----------------------------------------------------------------------
 
 els.shoot.addEventListener("click", () => link.send({ type: "start" }));
+$$("#framing button").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    if (state.prefs.framing === btn.dataset.v) return;
+    state.prefs.framing = btn.dataset.v; // optimistic; the server confirms
+    link.send({ type: "framing", framing: btn.dataset.v });
+    render();
+  }),
+);
 $("#change-theme").addEventListener("click", () => {
   view = "choose";
   render();

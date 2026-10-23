@@ -127,7 +127,7 @@ function buildThemeGrid() {
     btn.innerHTML = `<span class="o-theme-emoji"></span><span class="o-theme-name"></span><span class="o-theme-tag"></span>`;
     btn.querySelector(".o-theme-emoji").textContent = theme.emoji;
     btn.querySelector(".o-theme-name").textContent = theme.name;
-    btn.querySelector(".o-theme-tag").textContent = theme.full_body ? `👟 ${theme.tagline}` : theme.tagline;
+    btn.querySelector(".o-theme-tag").textContent = theme.tagline;
     btn.addEventListener("click", () => setPrefs({ theme_id: theme.id }));
     grid.append(btn);
   }
@@ -173,7 +173,7 @@ function render() {
   if (live) stage = "live";
   else if (photo) stage = `photo-${photo.status}`;
   els.body.dataset.stage = stage;
-  $("#guide").hidden = !(live && camera.stream && themes[prefs.theme_id]?.full_body);
+  $("#guide").hidden = !(live && camera.stream && prefs.framing !== "face");
   if (photo?.status === "processing") setStill(photo.id === state.photo?.id && localCapture ? localCapture : photo.original_url);
   if (photo?.status === "done") setStill(photo.result_url);
   renderMediaView(photo);
@@ -533,7 +533,7 @@ function syncSettings() {
   const { prefs } = state;
   const eventInput = $("#set-event");
   if (document.activeElement !== eventInput) eventInput.value = prefs.event_name;
-  $$("#settings .segmented[data-pref]").forEach((group) => {
+  $$(".segmented[data-pref]").forEach((group) => {
     const value = String(prefs[group.dataset.pref]);
     $$("button", group).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === value)));
   });
@@ -574,7 +574,7 @@ function syncSettings() {
 
 $("#set-event").addEventListener("input", debounce((e) => setPrefs({ event_name: e.target.value }), 600));
 
-$$("#settings .segmented[data-pref]").forEach((group) => {
+$$(".segmented[data-pref]").forEach((group) => {
   $$("button", group).forEach((btn) =>
     btn.addEventListener("click", () => {
       const key = group.dataset.pref;

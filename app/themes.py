@@ -3,8 +3,9 @@
 Every image prompt is built from these parts (wording follows proven "change the
 location" photo-editing prompts):
   1. IDENTITY_GUARD: everyone stays clearly recognisable, faces and proportions untouched.
-  2. A framing rule: keep the camera framing; full-body themes also ask for people shown
-     head to toe at a believable scale.
+  2. A framing rule chosen per shot, so every theme works both ways: full body (everyone
+     head to toe at a believable scale) or face only (a close-up, with a reminder after the
+     scene so outfit details like shoes don't make the model zoom out).
   3. The theme's scene, written like a photographer's brief.
   4. PLACE_INTEGRATION for themes set somewhere else: replace the environment completely
      and match its light, weather and clothing to it.
@@ -25,13 +26,25 @@ IDENTITY_GUARD = (
     "stated, setting and lighting. Keep outfits tasteful and suitable for an all-ages event. "
 )
 
-KEEP_FRAMING = "Keep the original camera angle and framing. "
-
 FULL_BODY_FRAMING = (
     "Keep the original camera angle and framing. Where their full bodies are visible, show "
-    "them head to toe with their feet planted on the ground, at a believable scale for the "
-    "setting, as if they were really photographed there. "
+    "them head to toe with their feet planted on the ground and contact shadows where they "
+    "touch it, at a believable scale for the setting, as if they were really photographed there. "
 )
+
+FACE_FRAMING = (
+    "Keep the original camera angle and the same close crop. This is a close-up portrait "
+    "framed on their faces and shoulders, with every face large, sharp and in focus. "
+)
+
+FACE_FRAMING_END = (
+    " Keep the same close-up crop as the original photo: do not zoom out or show more of "
+    "their bodies, and leave anything from the scene that would fall below the frame (such as "
+    "trousers, skirts or shoes) out of shot."
+)
+
+# Guests pick one on the pose screen; it applies to every theme: (before the scene, after it).
+FRAMINGS = {"full": (FULL_BODY_FRAMING, ""), "face": (FACE_FRAMING, FACE_FRAMING_END)}
 
 PLACE_INTEGRATION = (
     " Completely replace the original background with this location and naturally integrate "
@@ -43,8 +56,7 @@ PLACE_INTEGRATION = (
 
 REALISM = (
     " Make it look like they were genuinely photographed there with a professional full-frame "
-    "camera: natural skin texture and facial detail, realistic fabric and hair, contact shadows "
-    "where they touch the ground, realistic depth with subtle depth of field and authentic "
+    "camera: natural skin texture and facial detail, realistic fabric and hair, realistic depth with subtle depth of field and authentic "
     "environmental detail. Polished but believable, without looking artificial or over-edited. "
     "No text, logos, watermarks or extra people."
 )
@@ -63,9 +75,6 @@ class Theme:
     ink: str
     # What moves when the photo is turned into a short video clip
     motion: str = "The scene comes gently to life around them."
-    # Places that only look real with everyone in shot head to toe; the guest screen
-    # and camera ask guests to step back for these.
-    full_body: bool = False
     # Set somewhere else entirely (beach, mountains...): add PLACE_INTEGRATION.
     place: bool = False
 
@@ -87,7 +96,6 @@ THEMES: list[Theme] = [
             "faintly visible in the cold air."
         ),
         motion="Snowflakes drift down, fairy lights twinkle and their breath shows in the cold air.",
-        full_body=True,
         place=True,
         frame="#e8f1fb", accent="#5b8fd6", ink="#1d3557",
     ),
@@ -104,7 +112,6 @@ THEMES: list[Theme] = [
             "with soft light reflected off the sea and sand."
         ),
         motion="Palm leaves sway in the breeze, waves roll onto the sand and sunlight glitters on the sea.",
-        full_body=True,
         place=True,
         frame="#fff4dc", accent="#ff8a3d", ink="#7a3200",
     ),
@@ -120,13 +127,49 @@ THEMES: list[Theme] = [
             "hiking gear: puffer and shell jackets, beanies, hiking trousers, boots and small "
             "backpacks. Crisp mountain "
             "air, wind gently moving hair and clothing, warm low sunlight on their faces and long "
-            "shadows across the rocks. A wide landscape photograph that shows the epic scale of the "
-            "mountains around them."
+            "shadows across the rocks, with the epic scale of the mountains all around them."
         ),
         motion="Wind tugs at their jackets and hair, clouds drift across the peaks and an eagle glides far below.",
-        full_body=True,
         place=True,
         frame="#e7eee9", accent="#2f6b4f", ink="#16261e",
+    ),
+    Theme(
+        id="kawaii",
+        name="Kawaii Harajuku",
+        emoji="🎀",
+        tagline="Cute Tokyo street style",
+        prompt=(
+            "Scene: on location on a real pastel shopping street in Harajuku, Tokyo, on a bright "
+            "spring afternoon, with colourful shopfronts, a crêpe stand, cherry blossom trees and "
+            "strings of colourful bunting overhead. Dress every person head to toe in colourful "
+            "Harajuku street fashion: pastel oversized hoodies, cardigans and jackets, wide-leg "
+            "trousers or long skirts, chunky platform sneakers, colourful hair clips, bows and bag "
+            "charms, and novelty sunglasses. Soft, bright daylight with a pastel pink, mint and "
+            "lilac palette, like a Tokyo street-style magazine photo. Shop signs have no readable "
+            "writing."
+        ),
+        motion="Cherry blossom petals drift past, the bunting flutters and they strike cute peace-sign poses.",
+        place=True,
+        frame="#ffe4f1", accent="#ff6fae", ink="#5b1a4a",
+    ),
+    Theme(
+        id="classroom",
+        name="Classroom Days",
+        emoji="🏫",
+        tagline="Back to school",
+        prompt=(
+            "Scene: inside a real, sunlit school classroom on a bright morning, with rows of "
+            "wooden desks and chairs around them, with a green chalkboard covered in chalk doodles and "
+            "maths diagrams (no readable words), a globe, stacks of books, a few potted plants and "
+            "tall windows with sunlight streaming in. Dress every person head to toe in neat "
+            "school uniforms: crisp white shirts, ties or ribbon bows, navy blazers or cardigans, "
+            "pleated skirts or tailored trousers, socks and polished school shoes; some hold "
+            "books or a school bag. Warm natural window light with soft shadows, like a "
+            "nostalgic class photo."
+        ),
+        motion="Sunlight streams through the windows, chalk dust floats in the light and pages flutter on the desks.",
+        place=True,
+        frame="#2f4f3a", accent="#f2c94c", ink="#fdf8e8",
     ),
     Theme(
         id="festival",
@@ -140,56 +183,8 @@ THEMES: list[Theme] = [
             "fringed jackets, denim, ankle boots and wristbands. Warm sunset backlight with coloured stage light spilling onto them."
         ),
         motion="Stage lights sweep over the crowd and confetti flutters down through the air.",
-        full_body=True,
         place=True,
         frame="#2b1145", accent="#ff4fa3", ink="#ffe8f4",
-    ),
-    Theme(
-        id="lunar",
-        name="Lunar New Year",
-        emoji="🧧",
-        tagline="Huat ah!",
-        prompt=(
-            "Scene: on a festive Chinatown street during Lunar New Year at night, under rows of "
-            "glowing red lanterns and gold decorations, with a lion dance and fireworks in the "
-            "background. Dress every person head to toe in elegant red and gold festive outfits such "
-            "as cheongsam and mandarin-collar jackets; some hold red packets and mandarin oranges. Warm lantern light "
-            "with a soft red glow on their faces."
-        ),
-        motion="Red lanterns sway, the lion dancer bobs behind them and fireworks burst in the night sky.",
-        full_body=True,
-        place=True,
-        frame="#8f0d12", accent="#f6c453", ink="#fff3d6",
-    ),
-    Theme(
-        id="lights",
-        name="Festival of Lights",
-        emoji="🪔",
-        tagline="Shine bright",
-        prompt=(
-            "Scene: a joyful Deepavali / Diwali celebration in a courtyard at dusk, with rows of "
-            "glowing oil lamps (diyas), colourful rangoli on the floor, marigold garlands and "
-            "sparklers. Dress every person in rich festive outfits such as saris, kurtas, sherwanis "
-            "and lehengas in jewel tones with gold detailing. Warm golden lamplight on their faces."
-        ),
-        motion="Diya flames flicker, sparklers fizz and warm golden light dances across the rangoli.",
-        place=True,
-        frame="#3d1a5b", accent="#f9a825", ink="#fff6e0",
-    ),
-    Theme(
-        id="xmas",
-        name="Christmas Cheer",
-        emoji="🎄",
-        tagline="Merry & bright",
-        prompt=(
-            "Scene: a cosy living room on Christmas Eve, with a decorated tree and twinkling "
-            "lights, wrapped presents and a crackling fireplace hung with stockings. Dress every "
-            "person in a festive Christmas jumper with a Santa hat or reindeer antlers. Warm tungsten light from "
-            "the fire and fairy lights, like a candid family holiday photo."
-        ),
-        motion="The fire crackles, the tree lights twinkle and the stockings sway gently.",
-        place=True,
-        frame="#0f4d2c", accent="#d62839", ink="#fdf6e3",
     ),
     Theme(
         id="80s",
@@ -247,7 +242,6 @@ THEMES: list[Theme] = [
             "background lighting."
         ),
         motion="Photographers' flashes pop all around and spotlights sweep across the red carpet.",
-        full_body=True,
         place=True,
         frame="#111111", accent="#d4af37", ink="#f5e6b8",
     ),
@@ -267,7 +261,6 @@ THEMES: list[Theme] = [
             "a medium-format camera. Do not add magazine text or logos."
         ),
         motion="Studio strobes flash, a fan gently lifts their hair and clothes and they settle into confident model poses.",
-        full_body=True,
         frame="#f3eee8", accent="#1a1a1a", ink="#1a1a1a",
     ),
     Theme(
@@ -309,20 +302,20 @@ def get_theme(theme_id: str) -> Theme:
     return _BY_ID.get(theme_id, THEMES[0])
 
 
-def build_prompt(theme: Theme, custom_prompt: str = "") -> str:
+def build_prompt(theme: Theme, custom_prompt: str = "", framing: str = "full") -> str:
     """Final text sent to the image model.
 
     For the Custom theme the operator's text is the whole scene; for any other theme it is
-    appended as extra detail (e.g. "add a birthday cake").
+    appended as extra detail (e.g. "add a birthday cake"). `framing` is "full" or "face".
     """
     extra = custom_prompt.strip()
     if theme.id == CUSTOM_THEME.id:
         scene = extra or "Give the photo a fun, colourful party look."
     else:
         scene = theme.prompt + (f" Also: {extra}" if extra else "")
-    framing = FULL_BODY_FRAMING if theme.full_body else KEEP_FRAMING
+    lead, end = FRAMINGS.get(framing, FRAMINGS["full"])
     place = PLACE_INTEGRATION if theme.place else ""
-    return IDENTITY_GUARD + framing + scene + place + REALISM
+    return IDENTITY_GUARD + lead + scene + place + end + REALISM
 
 
 VIDEO_PROMPT = (

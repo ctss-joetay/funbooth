@@ -54,6 +54,7 @@ function render() {
   const { phase, prefs } = state;
   const theme = themes[prefs.theme_id];
   const active = !!myId && state.camera_id === myId;
+  const fullBody = prefs.framing !== "face";
 
   document.body.dataset.phase = phase;
   document.body.style.setProperty("--ar", aspectFor(prefs.orientation));
@@ -74,8 +75,8 @@ function render() {
   else if (prefs.camera_source !== "camera") status.textContent = "Standby: the operator has chosen a different camera";
   else if (!active) status.textContent = camera.ready ? "Standby: another camera device is active" : "Starting camera…";
   else status.textContent = { processing: "Creating the photo…", result: "Done! It's on the guest screen" }[phase]
-    || (theme?.full_body ? "Full body theme: frame everyone head to toe 👟" : "Booth camera · live");
-  $("#guide").hidden = !theme?.full_body || !camera.stream || phase === "processing";
+    || (fullBody ? "Full body: head to toe 👟" : "Face only: come close 🙂");
+  $("#guide").hidden = !fullBody || !camera.stream || phase === "processing";
 
   $("#shutter").disabled = !active || phase === "countdown" || phase === "processing";
 }

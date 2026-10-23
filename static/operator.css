@@ -40,6 +40,7 @@ body.operator {
 .o-theme-name { font-weight: 800; font-size: 15px; line-height: 1.15; }
 .o-theme-tag { font-size: 12px; opacity: .8; }
 .o-prompt textarea { min-height: 56px; }
+.o-framing { display: grid; gap: 8px; font-size: 14px; color: var(--muted); }
 
 .o-stage-col { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 14px; min-height: 0; min-width: 0; }
 .o-stage { container-type: size; display: grid; place-items: center; min-height: 0; }

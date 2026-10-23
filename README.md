@@ -7,9 +7,9 @@ gets a free **before/after GIF**, and the operator can turn any photo into a sho
 **AI video clip**. Only the operator can print or send photos, GIFs and clips to guests.
 
 **Themes included:** Winter Wonderland · Holidays in the Sun · Mountain Adventure ·
-Music Festival · Lunar New Year · Festival of Lights · Christmas Cheer · Totally 80s ·
-90s Throwback · Y2K 2000s · Red Carpet · Fashion Shoot · Black & White Studio ·
-Custom (operator types any scene)
+Kawaii Harajuku · Classroom Days · Music Festival · Totally 80s · 90s Throwback ·
+Y2K 2000s · Red Carpet · Fashion Shoot · Black & White Studio · Custom (operator types
+any scene). Every theme works as a **🧍 Full body** shot or a **🙂 Face only** close-up.
 
 ## Three booth modes
 
@@ -45,8 +45,10 @@ in one-iPad mode, can print or send.
 
 1. **Choose:** guests swipe the theme carousel on the guest screen and tap a theme.
    The operator decides which themes appear and can add sample pictures (see below).
-2. **Pose:** the guest screen shows the live camera. A guest taps **Take my photo!**,
-   or the operator taps **Take photo**, or the photographer presses the phone's shutter.
+2. **Pose:** the guest screen shows the live camera. Guests choose **🧍 Full body** or
+   **🙂 Face only** (the operator can switch it too, under the themes), then a guest taps
+   **Take my photo!**, or the operator taps **Take photo**, or the photographer presses
+   the phone's shutter.
 3. **Countdown:** 3-2-1 and a flash on every screen. The camera device captures the
    frame, cropped to exactly what was on screen.
 4. **AI:** the photo and theme prompt go to Seedream. Every prompt starts with an
@@ -71,9 +73,10 @@ Every prompt (`app/themes.py`) is built from the same parts. The wording follows
    facial structure, eyes, nose, mouth, skin tone, natural facial details, skin texture,
    age, expression and body proportions. It forbids beautifying, slimming, smoothing,
    de-aging or swapping faces, and keeps the same people in the same poses.
-2. **Framing.** Keep the original camera angle. **Full-body** themes (👟 on the cards) also
-   ask for people shown head to toe with their feet on the ground, at a believable scale
-   for the place.
+2. **Framing,** chosen per shot and available for every theme. **Full body** asks for
+   people shown head to toe with their feet on the ground, at a believable scale for the
+   place. **Face only** keeps the close crop: faces and shoulders large and sharp, with a
+   reminder after the scene so outfit details (like shoes) don't make the AI zoom out.
 3. **The scene,** written like a photographer's brief: location, time of day, light
    direction, outfits for every person.
 4. **Place integration** for themes set somewhere else. It completely replaces the
@@ -81,13 +84,14 @@ Every prompt (`app/themes.py`) is built from the same parts. The wording follows
    weather and colour temperature. Everyone is dressed for the place, so no one ends up
    in a cocktail dress on a mountain.
 5. **Realism.** "Genuinely photographed there with a professional camera", with natural
-   skin texture, contact shadows and subtle depth of field. Polished but believable, not
+   skin texture and subtle depth of field. Polished but believable, not
    over-edited, and no text or logos.
 
-For the most realistic far-away places, **capture people head to toe**. On full-body
-themes the guest screen, the phone camera and the operator's live view show head and
-feet guide lines and "Step back: head to toe". If only the upper body is in shot, the AI
-won't invent legs; it keeps the framing. Cameras capture up to 2560 px so faces keep
+For the most realistic far-away places, **capture people head to toe**. With **Full
+body** chosen, the guest screen, the phone camera and the operator's live view show head
+and feet guide lines and "Step back: head to toe". If only the upper body is in shot, the
+AI won't invent legs; it keeps the framing. With **Face only**, guests are asked to come
+close so their faces fill the frame. Cameras capture up to 2560 px so faces keep
 their detail when guests stand further back. Photos are generated at 2K, and face
 detail at that size held up well in testing (see the samples).
 
@@ -100,7 +104,7 @@ detail at that size held up well in testing (see the samples).
 - **Video clip:** tap **🎬 Video** on the operator, or the host menu on a one-iPad booth.
   To make one for every photo, turn on **Settings → Make a video clip of every photo
   automatically**. The finished photo becomes the first frame of a 5-second clip, with
-  a motion prompt per theme (snow falling, lanterns swaying, neon pulsing…). The clip
+  a motion prompt per theme (snow falling, cherry blossoms drifting, neon pulsing…). The clip
   loops on the guest screen when it's ready, and goes out through QR, AirDrop and
   downloads like the photos. If an iPad is in Low Power Mode and won't autoplay, a
   **▶ Watch your video** button appears.
@@ -123,7 +127,7 @@ theme, using the same prompts the booth uses. To
 replace them:
 - **⭐ Use as theme sample:** on any finished photo in the operator view.
 - **Settings → Make samples for every theme from the selected photo:** restyles one
-  good shot (e.g. your team) in every theme. This is one AI image per theme, ~10 in total.
+  good shot (e.g. your team) in every theme. This is one AI image per theme, 12 in total.
 - **Regenerate the built-in set:** run `OPENROUTER_API_KEY=... python scripts/make_samples.py`.
   It creates a new demo group and restyles it in every theme. Add `--photo team.jpg`
   to use your own photo, and set `OPENROUTER_RESOLUTION=1K` to keep it cheap. Commit
@@ -246,11 +250,11 @@ Themes live in [`app/themes.py`](app/themes.py). Each one has:
 - a name, emoji and tagline
 - the scene prompt, plus a motion line for video clips
 - three print-frame colours
-- `full_body`: asks guests to step back, and asks the AI for head-to-toe framing
 - `place`: the theme moves people somewhere else, so the place-integration rules apply
 
 Add an entry, redeploy, and it appears on the operator screen and the guest carousel.
-To narrow the list for an event (e.g. only winter and Christmas themes), use **Settings →
+Framing (full body or face only) isn't part of a theme: it's added by `build_prompt`.
+To narrow the list for an event (e.g. only the travel themes), use **Settings →
 Themes guests can choose**. For one-off ideas the operator can pick **Custom**, or type
 extra details (e.g. "add a birthday cake") under any theme.
 
@@ -258,7 +262,7 @@ extra details (e.g. "add a birthday cake") under any theme.
 
 OpenRouter listed Seedream 5.0 Flash from about **$0.018 per image** when this was
 written. Check the model page for current pricing and for any surcharge on 2K output.
-Each **Restyle** is another generation. **Make samples** creates one per theme (10 in
+Each **Restyle** is another generation. **Make samples** creates one per theme (12 in
 total), and the **Test AI connection** button makes one.
 
 Video clips cost more: about **$0.13** for a 5-second 720p clip with Seedance 1.5 Pro
@@ -273,6 +277,7 @@ before/after GIF is free.
 | Take photo is greyed out | The chosen camera isn't ready. Check the camera chip on the operator screen, start the camera on that device, or pick another one in Settings. |
 | Guests don't see themselves | The live preview comes from the camera device, so check that device is online and its camera is running. |
 | AI errors | Use **Test AI connection** to see the exact OpenRouter error. 401 means a bad key; 402 means you're out of credits. If `/images` is rejected, `auto` mode switches to chat completions on its own. You can force it with `OPENROUTER_API_MODE=chat`. |
+| "Blocked this request through content moderation" | Seedream's safety filter rejected the prompt. Tap **Restyle** to retry, or reword the extra details or Custom scene. When writing your own themes, describe outfits plainly: the first Kawaii draft was blocked until its outfit wording was toned down. |
 | Video failed | Hover or long-press 🎬 for OpenRouter's reason. A model that refuses the photo is skipped automatically. If they all refuse, try another photo or change `OPENROUTER_VIDEO_MODELS`. |
 | Video doesn't play on the guest screen | Low Power Mode blocks autoplay. Tap **▶ Watch your video**, or turn Low Power Mode off. |
 | Photos vanish after deploy | Mount a Railway volume at `/data`. |

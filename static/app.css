@@ -145,7 +145,6 @@ video.mirrored { transform: scaleX(-1); }
 }
 .fb-guide::before { content: "Top of heads"; top: 8px; }
 .fb-guide::after { content: "Feet 👟"; bottom: 8px; }
-.fb-badge { position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 99px; background: rgba(0, 0, 0, .55); color: #fff; font: 700 12px var(--font); }
 
 /* Print: only the print image, edge to edge ------------------------------------------ */
 #print-area { display: none; }
