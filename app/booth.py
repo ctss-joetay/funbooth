@@ -41,6 +41,8 @@ CAMERA_LABELS = {"operator": "operator", "display": "guest iPad", "camera": "pho
 MODES = {"solo": "display", "laptop": "camera", "two_ipads": "operator"}
 THEME_IDS = {t.id for t in THEMES} | {CUSTOM_THEME.id}
 GUEST_THEME_IDS = [t.id for t in THEMES]  # Custom needs a typed prompt, so it's operator-only
+# Themes that existed before prefs.json recorded the catalogue (see Booth._load_prefs).
+LEGACY_CATALOGUE = ["winter", "sun", "mountains", "festival", "lunar", "lights", "xmas", "80s", "90s", "y2k", "hollywood", "fashion", "noir"]
 CAPTURE_GRACE_SECONDS = 20  # how long after the countdown we wait for the photo upload
 MAX_PARALLEL_AI = 3
 MAX_PARALLEL_VIDEO = 2
@@ -142,13 +144,18 @@ class Booth:
     def _load_prefs(self) -> Prefs:
         prefs = Prefs(event_name=self.settings.default_event_name)
         try:
-            prefs.update(json.loads(self._prefs_path.read_text()))
-        except (OSError, ValueError):
+            saved = json.loads(self._prefs_path.read_text())
+            # Themes added since the prefs were saved start out visible to guests.
+            known = saved.get("catalogue", LEGACY_CATALOGUE)
+            if isinstance(saved.get("guest_themes"), list) and isinstance(known, list):
+                saved["guest_themes"] += [t for t in GUEST_THEME_IDS if t not in known]
+            prefs.update(saved)
+        except (OSError, ValueError, AttributeError):
             pass
         return prefs
 
     def _save_prefs(self) -> None:
-        self._prefs_path.write_text(json.dumps(asdict(self.prefs)))
+        self._prefs_path.write_text(json.dumps({**asdict(self.prefs), "catalogue": GUEST_THEME_IDS}))
 
     # -- theme samples --------------------------------------------------------------------
 

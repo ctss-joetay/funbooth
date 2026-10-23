@@ -547,6 +547,24 @@ def test_restart_recovers_interrupted_work(settings):
     assert store.get(stuck.id).status == "error"
 
 
+def test_new_themes_show_up_for_guests_after_an_update(settings):
+    prefs_path = settings.data_dir / "prefs.json"
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    # Saved by an older version, with the operator hiding 80s and Christmas.
+    old = ["winter", "sun", "mountains", "festival", "lunar", "lights", "90s", "y2k", "hollywood", "fashion", "noir"]
+    prefs_path.write_text(json.dumps({"guest_themes": old, "theme_id": "xmas"}))
+    with TestClient(create_app(settings)) as client:
+        prefs = client.app.state.booth.prefs
+        assert "kawaii" in prefs.guest_themes and "classroom" in prefs.guest_themes
+        assert "80s" not in prefs.guest_themes and "lunar" not in prefs.guest_themes
+        assert prefs.theme_id == "winter"
+        prefs.update({"guest_themes": [t for t in GUEST_THEME_IDS if t != "kawaii"]})
+        client.app.state.booth._save_prefs()
+    # Once saved with the current catalogue, a theme the operator hid stays hidden.
+    with TestClient(create_app(settings)) as client:
+        assert "kawaii" not in client.app.state.booth.prefs.guest_themes
+
+
 def test_pages_load_assets_from_versioned_urls(client):
     """A new deploy must never be mixed with CSS/JS cached from an older one."""
     page = client.get("/display")
