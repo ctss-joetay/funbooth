@@ -14,14 +14,13 @@
   <title>Fun Booth · Operator</title>
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/operator.css">
-  <style id="page-size"></style>
 </head>
-<body class="operator" data-phase="idle">
+<body class="operator" data-phase="idle" data-stage="empty">
   <header class="o-top">
     <div class="o-brand"><span class="o-logo">📸</span><span id="event-name">Fun Booth</span></div>
     <div class="o-status">
       <span class="chip"><span class="dot" id="dot-link"></span>Server</span>
-      <span class="chip"><span class="dot" id="dot-display"></span>Display</span>
+      <span class="chip"><span class="dot" id="dot-display"></span>Guest screen</span>
       <span class="chip"><span class="dot" id="dot-camera"></span><span id="camera-label">Camera</span></span>
       <span class="chip chip-ai" id="ai-mode" title="AI model"></span>
     </div>
@@ -30,7 +29,7 @@
 
   <main class="o-main">
     <section class="o-themes">
-      <h2 class="o-h">Theme</h2>
+      <h2 class="o-h">Theme <span class="o-muted">· guests can change it too</span></h2>
       <div class="o-theme-grid" id="theme-grid"></div>
       <label class="field o-prompt">
         <span id="prompt-label">Extra details (optional)</span>
@@ -45,13 +44,17 @@
           <img id="still" alt="">
           <div class="o-placeholder" id="placeholder">
             <div class="o-ph-emoji" id="ph-emoji">🖥️</div>
-            <div class="o-ph-title" id="ph-title">Live camera is on the display iPad</div>
-            <div class="o-ph-sub" id="ph-sub">Tap “Take photo” when your guests are ready.</div>
+            <div class="o-ph-title" id="ph-title"></div>
+            <div class="o-ph-sub" id="ph-sub"></div>
           </div>
+          <div class="o-busy"><div class="spinner"></div><div>Creating with AI…</div></div>
+          <div class="o-err"><div class="o-err-emoji">⚠️</div><div id="err-text"></div></div>
           <div class="o-count" id="count"></div>
-          <div class="o-busy" id="busy"><div class="spinner"></div><div>Creating with AI…</div></div>
-          <div class="o-err" id="err"><div class="o-err-emoji">⚠️</div><div id="err-text"></div></div>
-          <div class="o-phase" id="phase-label">Ready</div>
+          <div class="o-phase" id="phase-label">Guest screen: choosing a theme</div>
+          <div class="o-caption" id="caption">
+            <span id="caption-text"></span>
+            <button class="btn o-mini" id="set-sample" title="Show this photo as the theme's sample on the guest screen">⭐ Use as theme sample</button>
+          </div>
         </div>
       </div>
 
@@ -59,7 +62,7 @@
         <button class="btn btn-primary btn-big o-shoot" id="shoot"><span class="ico">📸</span><span>Take photo</span></button>
         <button class="btn btn-big" id="restyle"><span class="ico">🔁</span><span>Restyle</span></button>
         <button class="btn btn-big" id="print"><span class="ico">🖨️</span><span>Print</span></button>
-        <button class="btn btn-big" id="share"><span class="ico">📲</span><span>AirDrop</span></button>
+        <button class="btn btn-big" id="send"><span class="ico">📤</span><span>Send</span></button>
         <button class="btn btn-big" id="next"><span class="ico">⏭️</span><span>Next guest</span></button>
       </div>
     </section>
@@ -68,7 +71,8 @@
   <footer class="o-gallery">
     <div class="o-gallery-head">
       <h2 class="o-h">Recent photos</h2>
-      <span class="o-muted">Tap one to show it on the display</span>
+      <span class="o-muted">Tap one to print or send it</span>
+      <span class="o-muted o-keys">Keys: Space take photo · P print · S send · N next guest</span>
     </div>
     <div class="o-strip" id="strip"><div class="o-empty">Photos you take will appear here.</div></div>
   </footer>
@@ -81,9 +85,26 @@
         <h2>Print preview</h2>
         <p class="o-muted" id="print-size">6 × 4 in, landscape</p>
         <button class="btn btn-primary btn-big" id="do-print"><span class="ico">🖨️</span><span>Print</span></button>
-        <button class="btn btn-big" id="print-share"><span class="ico">📲</span><span>AirDrop</span></button>
         <button class="btn btn-big btn-ghost" id="close-print">Close</button>
-        <p class="o-hint">In the print dialog choose your AirPrint photo printer, the 4×6 paper size and the number of copies.</p>
+        <p class="o-hint">Choose your photo printer, 4×6 in (10×15 cm) paper and the number of copies in the print dialog. On iPad this is AirPrint; on a laptop any installed printer works.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Send -->
+  <dialog id="send-dialog" class="o-send-dialog">
+    <div class="o-send-body">
+      <div class="o-send-qr">
+        <img id="send-qr" alt="QR code to download the photo">
+        <p>Guests scan this with their phone camera to download the photo.</p>
+      </div>
+      <div class="o-send-side">
+        <h2>Send photo</h2>
+        <button class="btn btn-big btn-primary" id="send-airdrop"><span class="ico">📲</span><span>AirDrop / Share</span></button>
+        <button class="btn btn-big" id="send-guest-qr"><span class="ico">🖥️</span><span>Show QR on guest screen</span></button>
+        <a class="btn btn-big" id="send-download" download><span class="ico">⬇️</span><span>Download photo</span></a>
+        <a class="btn btn-big" id="send-download-print" download><span class="ico">🖼️</span><span>Download framed print</span></a>
+        <button class="btn btn-big btn-ghost" id="close-send">Close</button>
       </div>
     </div>
   </dialog>
@@ -100,14 +121,16 @@
         <input type="text" id="set-event" maxlength="80" placeholder="e.g. Sarah & Tom's Wedding">
       </label>
 
-      <div class="field">Which iPad takes the photo?
+      <div class="field">Which device takes the photo?
         <div class="segmented" data-pref="camera_source">
-          <button type="button" data-v="display">Display iPad</button>
-          <button type="button" data-v="operator">This iPad</button>
+          <button type="button" data-v="operator">This device</button>
+          <button type="button" data-v="display">Guest iPad</button>
+          <button type="button" data-v="camera">Phone / other</button>
         </div>
+        <span class="o-field-hint" id="camera-hint"></span>
       </div>
 
-      <div class="field" id="facing-field">This iPad's camera
+      <div class="field" id="facing-field">This device's camera
         <div class="segmented" id="facing">
           <button type="button" data-v="environment">Back</button>
           <button type="button" data-v="user">Front</button>
@@ -131,13 +154,23 @@
       </div>
 
       <label class="switch">QR code on prints <input type="checkbox" data-pref="print_qr"></label>
-      <label class="switch">QR code on the display <input type="checkbox" data-pref="show_qr"></label>
+
+      <div class="field">Themes guests can choose
+        <div class="o-chips" id="guest-themes"></div>
+      </div>
+
+      <div class="field">Theme samples on the guest screen
+        <div class="o-samples" id="samples"></div>
+        <button class="btn" type="button" id="make-samples"><span class="ico">✨</span><span>Make samples for every theme from the selected photo</span></button>
+        <span class="o-field-hint">Uses one AI image per theme. You can also tap ⭐ on any finished photo to make it that theme's sample.</span>
+      </div>
 
       <div class="o-settings-tools">
-        <label class="btn" for="upload"><span class="ico">🖼️</span>Use a photo from this iPad</label>
+        <label class="btn" for="upload"><span class="ico">🖼️</span>Use a photo from this device</label>
         <input type="file" id="upload" accept="image/*" hidden>
         <button class="btn" type="button" id="test-ai"><span class="ico">🧪</span>Test AI connection</button>
-        <a class="btn" href="/display" target="_blank" rel="noopener"><span class="ico">🖥️</span>Open display here</a>
+        <a class="btn" href="/display" target="_blank" rel="noopener"><span class="ico">🖥️</span>Open guest screen</a>
+        <a class="btn" href="/camera" target="_blank" rel="noopener"><span class="ico">📷</span>Open camera page</a>
         <button class="btn" type="button" id="lock"><span class="ico">🔒</span>Lock</button>
       </div>
       <p class="o-muted o-test-result" id="test-result"></p>

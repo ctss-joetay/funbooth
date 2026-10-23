@@ -1,10 +1,17 @@
 import {
-  $, $$, Camera, Sharer, api, aspectFor, connect, ensurePin, forgetPin, loadThemes,
-  printUrlFor, store, toast, uploadPhoto,
+  $, $$, Camera, PreviewStreamer, Sharer, api, aspectFor, connect, ensurePin, forgetPin, loadThemes,
+  printPhoto, printUrlFor, store, toast, uploadPhoto,
 } from "/static/common.js";
 
 const FACING_KEY = "funbooth.operator.facing";
-const PHASE_LABELS = { idle: "Ready", countdown: "Smile!", processing: "Creating…", result: "Ready to print", error: "Error" };
+const GUEST_SCREEN = {
+  idle: "Guest screen: choosing a theme",
+  countdown: "Guest screen: countdown",
+  processing: "Guest screen: creating…",
+  result: "Guest screen: showing the result",
+  error: "Guest screen: error",
+};
+const CAMERA_NAMES = { operator: "This device", display: "Guest iPad", camera: "Phone" };
 const CUSTOM_COLORS = { frame: "#2a2d3a", accent: "#7c5cff", ink: "#ffffff" };
 
 const els = {
@@ -16,11 +23,11 @@ const els = {
   strip: $("#strip"),
   settings: $("#settings"),
   printDialog: $("#print-dialog"),
-  printImg: $("#print-img"),
+  sendDialog: $("#send-dialog"),
   shoot: $("#shoot"),
   restyle: $("#restyle"),
   print: $("#print"),
-  share: $("#share"),
+  send: $("#send"),
   next: $("#next"),
 };
 
@@ -35,10 +42,14 @@ let state = null;
 let myId = null;
 let localCapture = null;
 let countdownTimer = null;
+let selectedId = null; // photo the Print / Send / Restyle buttons act on
+let pinned = false; // operator tapped a thumbnail, so show it instead of the live camera
+let lastBoothPhotoId = null;
 
 await ensurePin();
 themes = await loadThemes();
 buildThemeGrid();
+buildGuestThemeChips();
 
 const link = connect(
   "operator",
@@ -49,16 +60,22 @@ const link = connect(
       loadGallery();
     },
     state(msg) {
-      const previousPhase = state?.phase;
+      const previous = state;
       state = msg;
       if (state.phase !== "countdown") stopCountdown();
-      if (state.phase !== "processing" && previousPhase === "processing") clearLocalCapture();
-      if (state.photo) upsertPhoto(state.photo);
+      if (state.phase !== "processing" && previous?.phase === "processing") clearLocalCapture();
+      if (state.phase === "countdown" || (state.phase === "idle" && previous?.phase !== "idle")) pinned = false;
+      if (state.photo) {
+        upsertPhoto(state.photo);
+        if (state.photo.id !== lastBoothPhotoId) selectedId = state.photo.id; // follow new shots
+      }
+      lastBoothPhotoId = state.photo?.id ?? lastBoothPhotoId;
       render();
     },
     countdown: runCountdown,
     photo(msg) {
       upsertPhoto(msg.photo);
+      render();
     },
     toast(msg) {
       toast(msg.text, msg.level);
@@ -66,6 +83,8 @@ const link = connect(
   },
   (online) => $("#dot-link").classList.toggle("on", online),
 );
+
+const streamer = new PreviewStreamer(camera, link);
 
 function setPrefs(partial) {
   if (!state) return;
@@ -81,6 +100,8 @@ function debounce(fn, ms) {
     t = setTimeout(() => fn(...args), ms);
   };
 }
+
+const selected = () => (selectedId ? gallery.get(selectedId) : null);
 
 // -- themes -----------------------------------------------------------------------------
 
@@ -110,9 +131,9 @@ els.prompt.addEventListener("input", debounce(() => setPrefs({ custom_prompt: el
 
 function render() {
   if (!state) return;
-  const { phase, prefs, photo, devices } = state;
-  const usingOwnCamera = prefs.camera_source === "operator";
-  const cameraReady = usingOwnCamera ? camera.ready : devices.display_camera;
+  const { phase, prefs, devices } = state;
+  const photo = selected();
+  const isCamera = !!myId && state.camera_id === myId;
 
   els.body.dataset.phase = phase;
   els.body.style.setProperty("--ar", aspectFor(prefs.orientation));
@@ -121,8 +142,8 @@ function render() {
 
   // Status chips
   $("#dot-display").classList.toggle("on", devices.display > 0);
-  $("#dot-camera").classList.toggle("on", cameraReady);
-  $("#camera-label").textContent = usingOwnCamera ? "This camera" : "Display camera";
+  $("#dot-camera").classList.toggle("on", !!state.camera_id);
+  $("#camera-label").textContent = `${CAMERA_NAMES[prefs.camera_source]} camera`;
   $("#ai-mode").textContent = `AI: ${state.ai_mode}`;
 
   // Themes + prompt
@@ -132,55 +153,83 @@ function render() {
   els.prompt.placeholder = custom ? "e.g. a medieval castle banquet with knights and banners" : "e.g. add a birthday cake and balloons";
   if (document.activeElement !== els.prompt) els.prompt.value = prefs.custom_prompt;
 
-  // Stage
-  syncCamera(usingOwnCamera);
-  els.body.classList.toggle("has-camera", !!camera.stream);
-  renderPlaceholder(prefs, devices, usingOwnCamera);
-  if (phase === "processing") setStill(localCapture || photo?.original_url);
-  if (phase === "result" && photo?.result_url) setStill(photo.result_url);
-  $("#err-text").textContent = state.message || "Something went wrong.";
-  $("#phase-label").textContent = PHASE_LABELS[phase] || phase;
+  // This device as the camera
+  syncCamera(prefs.camera_source === "operator");
+  els.body.classList.toggle("has-camera", !!camera.stream && isCamera);
+  streamer.update(isCamera && state.preview_wanted, aspectFor(prefs.orientation));
+
+  // Stage: live camera while this device is shooting, otherwise the selected photo.
+  const live = isCamera && (phase === "countdown" || (phase === "idle" && !pinned));
+  let stage = "empty";
+  if (live) stage = "live";
+  else if (photo) stage = `photo-${photo.status}`;
+  els.body.dataset.stage = stage;
+  if (photo?.status === "processing") setStill(photo.id === state.photo?.id && localCapture ? localCapture : photo.original_url);
+  if (photo?.status === "done") setStill(photo.result_url);
+  $("#err-text").textContent = photo?.error || "Something went wrong.";
+  $("#phase-label").textContent = GUEST_SCREEN[phase] || phase;
+  renderPlaceholder(prefs, devices);
+  renderCaption(photo, live);
 
   // Actions
   const theme = themes[prefs.theme_id];
-  els.shoot.disabled = phase === "countdown" || !cameraReady;
+  const done = photo?.status === "done";
+  els.shoot.disabled = phase === "countdown" || !state.camera_id;
   els.restyle.disabled = !photo || photo.status === "processing";
-  els.restyle.title = theme ? `Restyle this photo as ${theme.name}` : "";
-  els.print.disabled = !(phase === "result" && photo?.print_url);
+  els.restyle.title = theme && photo ? `Restyle the selected photo as ${theme.name}` : "";
+  els.print.disabled = !done;
+  els.send.disabled = !done;
   els.next.disabled = phase === "idle";
 
-  if (phase === "result" && photo?.print_url) {
-    const printUrl = printUrlFor(photo, prefs);
-    if (els.printImg.dataset.src !== printUrl) els.printImg.src = els.printImg.dataset.src = printUrl;
-    sharer.prepare(photo, printUrl).then(updateShareButtons);
-  }
-  updateShareButtons();
+  if (done) sharer.prepare(photo, printUrlFor(photo, prefs)).then(renderSend);
+  renderSend();
   syncSettings();
   markCurrentThumb();
 }
 
-function renderPlaceholder(prefs, devices, usingOwnCamera) {
-  let emoji = "🖥️";
-  let title = "Live camera is on the display iPad";
-  let sub = "Tap “Take photo” when your guests are ready.";
-  if (usingOwnCamera && camera.error) {
-    emoji = "🚫";
-    title = "This iPad's camera is blocked";
-    sub = "Allow camera access in Safari (aA menu → Website Settings), then tap here to retry.";
-  } else if (usingOwnCamera) {
-    emoji = "📷";
-    title = "Starting this iPad's camera…";
-    sub = "Allow camera access if Safari asks.";
-  } else if (!devices.display) {
-    title = "Display iPad not connected";
-    sub = `Open ${location.host}/display on the guest-facing iPad.`;
-  } else if (!devices.display_camera) {
-    title = "Display camera is off";
-    sub = "Tap “Start display” on the guest iPad and allow camera access.";
+function renderPlaceholder(prefs, devices) {
+  let emoji = "📷";
+  let title = "";
+  let sub = "";
+  const source = prefs.camera_source;
+  if (source === "operator") {
+    if (camera.error) {
+      emoji = "🚫";
+      title = "This device's camera is blocked";
+      sub = "Allow camera access in the browser's site settings, then tap here to retry.";
+    } else {
+      title = "Starting this device's camera…";
+      sub = "Allow camera access if the browser asks.";
+    }
+  } else if (source === "display") {
+    emoji = "🖥️";
+    title = !devices.display ? "Guest iPad not connected" : state.camera_id ? "The guest iPad is the camera" : "Guest iPad camera is off";
+    sub = !devices.display
+      ? `Open ${location.host}/display on the guest iPad.`
+      : state.camera_id
+        ? "Guests pick a theme and tap “Take my photo”, or tap Take photo here."
+        : "Tap “Camera + guest screen” on the guest iPad and allow camera access.";
+  } else {
+    emoji = "📱";
+    title = !devices.camera ? "No phone camera connected" : state.camera_id ? "The phone is the camera" : "Phone camera isn't started";
+    sub = !devices.camera
+      ? `Open ${location.host}/camera on the phone and tap Start camera.`
+      : "Shoot with the phone's shutter button, or tap Take photo here.";
   }
   $("#ph-emoji").textContent = emoji;
   $("#ph-title").textContent = title;
   $("#ph-sub").textContent = sub;
+}
+
+function renderCaption(photo, live) {
+  const caption = $("#caption");
+  caption.hidden = live || !photo;
+  if (!photo) return;
+  const theme = themes[photo.theme_id];
+  const time = new Date(photo.created_at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const status = { processing: " · creating…", error: " · failed" }[photo.status] || "";
+  $("#caption-text").textContent = `${theme?.emoji ?? ""} ${theme?.name ?? ""} · ${time}${status}`;
+  $("#set-sample").hidden = photo.status !== "done" || photo.theme_id === "custom";
 }
 
 function setStill(src) {
@@ -192,16 +241,7 @@ function clearLocalCapture() {
   localCapture = null;
 }
 
-function updateShareButtons() {
-  const result = state?.phase === "result" && state.photo?.result_url;
-  const label = sharer.supported ? "AirDrop" : "Open link";
-  for (const btn of [els.share, $("#print-share")]) {
-    btn.lastElementChild.textContent = label;
-    btn.disabled = !result || (sharer.supported && !sharer.ready);
-  }
-}
-
-// -- camera (only when this iPad is the one taking photos) ------------------------------
+// -- camera (only when this device takes the photos) ------------------------------------
 
 function syncCamera(want) {
   camera.sync(want).then((changed) => {
@@ -256,8 +296,6 @@ async function captureAndUpload() {
   }
   const blob = await camera.capture(aspectFor(state.prefs.orientation));
   localCapture = URL.createObjectURL(blob);
-  setStill(localCapture);
-  els.body.dataset.phase = "processing";
   try {
     await uploadPhoto(blob);
   } catch (err) {
@@ -270,40 +308,72 @@ async function captureAndUpload() {
 els.shoot.addEventListener("click", () => link.send({ type: "start" }));
 els.next.addEventListener("click", () => link.send({ type: "reset" }));
 els.restyle.addEventListener("click", () => {
-  if (state?.photo) link.send({ type: "regenerate", photo_id: state.photo.id });
+  if (selectedId) link.send({ type: "regenerate", photo_id: selectedId });
 });
+$("#set-sample").addEventListener("click", () => link.send({ type: "set_sample", photo_id: selectedId }));
 
-els.print.addEventListener("click", () => {
-  const { photo, prefs } = state;
-  $("#print-preview").src = printUrlFor(photo, prefs);
-  $("#print-size").textContent = prefs.orientation === "portrait" ? "4 × 6 in, portrait" : "6 × 4 in, landscape";
+els.print.addEventListener("click", openPrint);
+function openPrint() {
+  const photo = selected();
+  if (photo?.status !== "done") return;
+  $("#print-preview").src = printUrlFor(photo, state.prefs);
+  $("#print-size").textContent = photo.orientation === "portrait" ? "4 × 6 in, portrait" : "6 × 4 in, landscape";
   els.printDialog.showModal();
-});
+}
 $("#close-print").addEventListener("click", () => els.printDialog.close());
-$("#do-print").addEventListener("click", async () => {
-  try {
-    await els.printImg.decode();
-  } catch {
-    toast("The print image didn't load yet. Try again in a moment.", "error");
-    return;
-  }
-  const portrait = state.prefs.orientation === "portrait";
-  $("#page-size").textContent = `@page { size: ${portrait ? "4in 6in" : "6in 4in"}; margin: 0; }`;
+$("#do-print").addEventListener("click", () => {
   els.printDialog.close();
-  window.print();
+  printPhoto(selected(), state.prefs);
 });
 
-async function shareCurrent() {
+// Send: QR for guests to scan from here, AirDrop where the browser supports it, the
+// guest screen, or plain downloads (handy on a laptop).
+els.send.addEventListener("click", openSend);
+function openSend() {
+  const photo = selected();
+  if (photo?.status !== "done") return;
+  renderSend();
+  els.sendDialog.showModal();
+}
+function renderSend() {
+  const photo = selected();
+  if (!photo || photo.status !== "done" || !state) return;
+  $("#send-qr").src = photo.qr_url;
+  $("#send-download").href = photo.result_url;
+  $("#send-download").download = `funbooth-${photo.id.slice(0, 8)}.jpg`;
+  $("#send-download-print").href = printUrlFor(photo, state.prefs);
+  $("#send-download-print").download = `funbooth-${photo.id.slice(0, 8)}-print.jpg`;
+  $("#send-airdrop").hidden = !sharer.supported;
+  $("#send-airdrop").disabled = !sharer.ready;
+  const onGuest = state.qr?.id === photo.id;
+  $("#send-guest-qr").lastElementChild.textContent = onGuest ? "Hide QR on guest screen" : "Show QR on guest screen";
+  $("#send-guest-qr").disabled = !state.devices.display;
+}
+$("#send-airdrop").addEventListener("click", async () => {
   try {
-    if (await sharer.share(state?.prefs.event_name || "Fun Booth")) return;
+    await sharer.share(state.prefs.event_name || "Fun Booth");
   } catch (err) {
     toast(`Couldn't share: ${err.message}`, "error");
-    return;
   }
-  if (state?.photo) window.open(state.photo.share_path, "_blank", "noopener");
-}
-els.share.addEventListener("click", shareCurrent);
-$("#print-share").addEventListener("click", shareCurrent);
+});
+$("#send-guest-qr").addEventListener("click", () => {
+  const photo = selected();
+  link.send({ type: "send_qr", photo_id: state.qr?.id === photo.id ? null : photo.id });
+});
+$("#close-send").addEventListener("click", () => els.sendDialog.close());
+
+// Laptop shortcuts
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey || document.querySelector("dialog[open]")) return;
+  if (e.target.closest("input, textarea, select")) return;
+  const key = e.key.toLowerCase();
+  if (key === " " && !els.shoot.disabled) link.send({ type: "start" });
+  else if (key === "p") openPrint();
+  else if (key === "s") openSend();
+  else if (key === "n" && !els.next.disabled) link.send({ type: "reset" });
+  else return;
+  e.preventDefault();
+});
 
 // -- gallery ----------------------------------------------------------------------------
 
@@ -311,7 +381,9 @@ async function loadGallery() {
   try {
     const photos = await api("/api/photos?limit=60");
     photos.forEach((p) => gallery.set(p.id, p));
+    selectedId = selectedId || photos[0]?.id || null;
     renderGallery();
+    render();
   } catch (err) {
     toast(`Couldn't load recent photos: ${err.message}`, "error");
   }
@@ -333,7 +405,11 @@ function renderGallery() {
       btn = document.createElement("button");
       btn.className = "o-thumb";
       btn.innerHTML = `<img alt="" loading="lazy"><span class="badge" hidden></span>`;
-      btn.addEventListener("click", () => link.send({ type: "show", photo_id: photo.id }));
+      btn.addEventListener("click", () => {
+        selectedId = photo.id;
+        pinned = true;
+        render();
+      });
       thumbs.set(photo.id, btn);
     }
     btn.classList.toggle("portrait", photo.orientation === "portrait");
@@ -348,8 +424,7 @@ function renderGallery() {
 }
 
 function markCurrentThumb() {
-  const current = state?.photo?.id;
-  thumbs.forEach((btn, id) => btn.setAttribute("aria-current", String(id === current)));
+  thumbs.forEach((btn, id) => btn.setAttribute("aria-current", String(id === selectedId)));
 }
 
 // -- settings ---------------------------------------------------------------------------
@@ -359,6 +434,29 @@ $("#open-settings").addEventListener("click", () => {
   syncSettings();
   els.settings.showModal();
 });
+
+function buildGuestThemeChips() {
+  const box = $("#guest-themes");
+  for (const theme of Object.values(themes)) {
+    if (theme.id === "custom") continue;
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "o-chip";
+    chip.dataset.id = theme.id;
+    chip.textContent = `${theme.emoji} ${theme.name}`;
+    chip.addEventListener("click", () => {
+      const current = new Set(state.prefs.guest_themes);
+      if (current.has(theme.id)) {
+        if (current.size === 1) return toast("Guests need at least one theme.");
+        current.delete(theme.id);
+      } else {
+        current.add(theme.id);
+      }
+      setPrefs({ guest_themes: [...current] });
+    });
+    box.append(chip);
+  }
+}
 
 function syncSettings() {
   if (!state) return;
@@ -372,6 +470,35 @@ function syncSettings() {
   $$("#settings input[type=checkbox][data-pref]").forEach((box) => (box.checked = !!prefs[box.dataset.pref]));
   $$("#facing button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === camera.facing)));
   $("#facing-field").hidden = prefs.camera_source !== "operator";
+  $("#camera-hint").textContent = {
+    operator: "This iPad or laptop's camera. Its live view is shown to guests on the guest screen.",
+    display: "The guest iPad's front camera. Also the setting for a single iPad doing everything.",
+    camera: `Open ${location.host}/camera on an iPhone or other device to use it as the camera.`,
+  }[prefs.camera_source];
+
+  $$("#guest-themes .o-chip").forEach((c) => c.setAttribute("aria-pressed", String(prefs.guest_themes.includes(c.dataset.id))));
+
+  const samples = $("#samples");
+  const sampleKey = JSON.stringify(state.samples);
+  if (samples.dataset.key !== sampleKey) {
+    samples.dataset.key = sampleKey;
+    samples.innerHTML = "";
+    for (const theme of Object.values(themes)) {
+      if (theme.id === "custom") continue;
+      const tile = document.createElement("div");
+      tile.className = "o-sample";
+      const url = state.samples[theme.id];
+      tile.innerHTML = url ? `<img alt="">` : `<span class="o-sample-none">${theme.emoji}</span>`;
+      if (url) tile.querySelector("img").src = url;
+      tile.title = `${theme.name}: ${url ? "has a sample" : "no sample yet"}`;
+      samples.append(tile);
+    }
+  }
+  const make = $("#make-samples");
+  make.disabled = state.making_samples || !selected();
+  make.lastElementChild.textContent = state.making_samples
+    ? "Making samples…"
+    : "Make samples for every theme from the selected photo";
 }
 
 $("#set-event").addEventListener("input", debounce((e) => setPrefs({ event_name: e.target.value }), 600));
@@ -398,6 +525,10 @@ $$("#facing button").forEach((btn) =>
     render();
   }),
 );
+
+$("#make-samples").addEventListener("click", () => {
+  if (selectedId) link.send({ type: "make_samples", photo_id: selectedId });
+});
 
 $("#upload").addEventListener("change", async (e) => {
   const file = e.target.files?.[0];

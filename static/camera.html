@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Booth Camera">
+  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="/static/camera.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="icon" href="/static/icon-180.png">
+  <title>Fun Booth · Camera</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/camera.css">
+</head>
+<body class="camera-page" data-phase="idle">
+  <main class="c-stage">
+    <div class="c-frame">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="c-count" id="count"></div>
+      <div class="c-flash" id="flash"></div>
+      <div class="c-overlay" id="overlay">
+        <div class="spinner"></div>
+        <div id="overlay-text">Sent! Creating the photo…</div>
+      </div>
+    </div>
+    <div class="c-rotate">↻ Turn sideways for landscape photos</div>
+  </main>
+
+  <header class="c-top">
+    <span class="dot" id="conn"></span>
+    <span class="c-status" id="status">Connecting…</span>
+    <span class="c-theme" id="theme"></span>
+  </header>
+
+  <footer class="c-bottom">
+    <button class="c-round" id="flip" aria-label="Switch camera">🔄</button>
+    <button class="c-shutter" id="shutter" aria-label="Take photo"><span></span></button>
+    <button class="c-round" id="lock" aria-label="Lock">🔒</button>
+  </footer>
+
+  <div class="c-start" id="start">
+    <div class="c-start-card">
+      <div class="c-start-emoji">📷</div>
+      <h1>Booth camera</h1>
+      <p>Use this phone, iPad or laptop as the booth camera. Guests see the live view on the display iPad.</p>
+      <button class="btn btn-primary btn-big" id="start-btn">Start camera</button>
+      <label class="switch c-make-active">Make this the booth camera <input type="checkbox" id="make-active" checked></label>
+    </div>
+  </div>
+
+  <script type="module" src="/static/camera.js"></script>
+</body>
+</html>

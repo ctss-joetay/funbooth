@@ -15,7 +15,6 @@ import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import segno
@@ -26,7 +25,7 @@ from PIL import Image
 
 from .ai import AIError, ImageAI
 from .booth import ROLES, Booth
-from .config import Settings, load_settings
+from .config import STATIC_DIR, Settings, load_settings
 from .printing import compose_print
 from .storage import normalize_jpeg, valid_id
 from .themes import all_themes, get_theme
@@ -34,7 +33,6 @@ from .themes import all_themes, get_theme
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("funbooth")
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 THUMB_SIZE = 360
 
@@ -92,6 +90,10 @@ def create_app(settings: Settings | None = None, ai: ImageAI | None = None) -> F
     @app.get("/display", include_in_schema=False)
     async def display_page():
         return FileResponse(STATIC_DIR / "display.html")
+
+    @app.get("/camera", include_in_schema=False)
+    async def camera_page():
+        return FileResponse(STATIC_DIR / "camera.html")
 
     @app.get("/healthz")
     async def healthz():
@@ -172,6 +174,13 @@ def create_app(settings: Settings | None = None, ai: ImageAI | None = None) -> F
             return Response(data, media_type="image/jpeg", headers=no_store)
         raise HTTPException(status_code=404)
 
+    @app.get("/samples/{theme_id}.jpg", include_in_schema=False)
+    async def sample(theme_id: str):
+        path = booth.sample_path(theme_id) if theme_id in booth.samples else None
+        if not path or not path.exists():
+            raise HTTPException(status_code=404)
+        return FileResponse(path, headers=cache_forever)  # URL carries a version
+
     @app.get("/qr/{photo_id}.svg", include_in_schema=False)
     async def qr(photo_id: str, request: Request):
         rec = get_photo(photo_id)
@@ -207,9 +216,14 @@ def create_app(settings: Settings | None = None, ai: ImageAI | None = None) -> F
         client_id = await booth.connect(ws, role)
         try:
             while True:
-                text = await ws.receive_text()
+                message = await ws.receive()
+                if message["type"] == "websocket.disconnect":
+                    break
+                if message.get("bytes") is not None:  # live preview frame from the camera
+                    await booth.relay_frame(client_id, message["bytes"])
+                    continue
                 try:
-                    msg = json.loads(text)
+                    msg = json.loads(message.get("text") or "")
                 except ValueError:
                     continue
                 await booth.handle(client_id, msg)

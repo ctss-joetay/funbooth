@@ -1,13 +1,20 @@
 """Live booth state shared by the operator and display iPads over WebSockets.
 
-Flow: operator taps "Take photo" -> server picks the device whose camera will shoot and
-broadcasts a countdown -> that device uploads the frame -> the AI restyles it -> everyone
-gets the result.
+Devices: the operator (iPad or laptop) runs the booth, the display iPad faces the guests,
+and the photo is shot by whichever device is chosen as the camera: the operator device, the
+display itself, or a separate phone running the camera page.
+
+Flow: guests pick a theme and tap "Take my photo" (or the operator / camera taps the
+shutter) -> server broadcasts a countdown -> the camera device uploads the frame -> the AI
+restyles it -> everyone gets the result. Only the operator can print or send photos.
+While guests pose, the camera device streams small JPEG preview frames that the server
+relays to the display.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 import time
@@ -17,17 +24,21 @@ from dataclasses import asdict, dataclass, field
 from fastapi import WebSocket
 
 from .ai import AIError, ImageAI
-from .config import Settings
+from .config import STATIC_DIR, Settings
 from .printing import LAYOUTS, layout_for
 from .storage import PhotoRecord, PhotoStore, normalize_jpeg
 from .themes import CUSTOM_THEME, THEMES, build_prompt, get_theme
 
 log = logging.getLogger("funbooth.booth")
 
-ROLES = {"operator", "display"}
+ROLES = {"operator", "display", "camera"}
+CAMERA_LABELS = {"operator": "operator", "display": "guest iPad", "camera": "phone"}
 THEME_IDS = {t.id for t in THEMES} | {CUSTOM_THEME.id}
+GUEST_THEME_IDS = [t.id for t in THEMES]  # Custom needs a typed prompt, so it's operator-only
 CAPTURE_GRACE_SECONDS = 20  # how long after the countdown we wait for the photo upload
 MAX_PARALLEL_AI = 3
+SAMPLE_SIZE = 1024
+MAX_PREVIEW_FRAME = 400_000
 
 
 @dataclass
@@ -37,11 +48,11 @@ class Prefs:
     event_name: str = "Fun Booth"
     theme_id: str = THEMES[0].id
     custom_prompt: str = ""
-    camera_source: str = "display"  # which iPad's camera shoots: display | operator
+    camera_source: str = "operator"  # which device shoots: operator | display | camera (phone)
     countdown: int = 3
     orientation: str = "landscape"  # print layout: landscape (6x4) | portrait (4x6)
     print_qr: bool = True  # QR code on the printed photo
-    show_qr: bool = True  # QR code on the display next to the result
+    guest_themes: list[str] = field(default_factory=lambda: list(GUEST_THEME_IDS))
 
     def update(self, data: dict) -> None:
         if "event_name" in data:
@@ -50,7 +61,7 @@ class Prefs:
             self.theme_id = data["theme_id"]
         if "custom_prompt" in data:
             self.custom_prompt = str(data["custom_prompt"])[:600]
-        if data.get("camera_source") in ("display", "operator"):
+        if data.get("camera_source") in CAMERA_LABELS:
             self.camera_source = data["camera_source"]
         if "countdown" in data:
             try:
@@ -59,9 +70,12 @@ class Prefs:
                 pass
         if data.get("orientation") in LAYOUTS:
             self.orientation = data["orientation"]
-        for key in ("print_qr", "show_qr"):
-            if key in data:
-                setattr(self, key, bool(data[key]))
+        if "print_qr" in data:
+            self.print_qr = bool(data["print_qr"])
+        if isinstance(data.get("guest_themes"), list):
+            chosen = [t for t in GUEST_THEME_IDS if t in data["guest_themes"]]
+            if chosen:  # guests always need at least one theme
+                self.guest_themes = chosen
 
 
 @dataclass
@@ -70,7 +84,9 @@ class Client:
     role: str
     ws: WebSocket
     camera_ready: bool = False
+    wants_preview: bool = False
     connected_at: float = field(default_factory=time.monotonic)
+    send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 class Booth:
@@ -80,15 +96,20 @@ class Booth:
         self.store = PhotoStore(settings.data_dir)
         self._prefs_path = settings.data_dir / "prefs.json"
         self.prefs = self._load_prefs()
+        self.samples_dir = settings.data_dir / "samples"
+        self.samples_dir.mkdir(parents=True, exist_ok=True)
+        self.samples = {t.id: self._sample_url(t.id) for t in THEMES}
 
         self.phase = "idle"  # idle | countdown | processing | result | error
         self.message = ""
         self.current: PhotoRecord | None = None
+        self.qr_photo: PhotoRecord | None = None  # QR the operator sent to the guest screen
         self.clients: dict[str, Client] = {}
 
         self._countdown_seq = 0
         self._ai_slots = asyncio.Semaphore(MAX_PARALLEL_AI)
         self._tasks: set[asyncio.Task] = set()
+        self._making_samples = False
 
     # -- prefs ----------------------------------------------------------------------------
 
@@ -103,24 +124,45 @@ class Booth:
     def _save_prefs(self) -> None:
         self._prefs_path.write_text(json.dumps(asdict(self.prefs)))
 
+    # -- theme samples --------------------------------------------------------------------
+
+    def sample_path(self, theme_id: str):
+        return self.samples_dir / f"{theme_id}.jpg"
+
+    def _sample_url(self, theme_id: str) -> str | None:
+        """Operator-made samples win; otherwise fall back to images shipped in static/samples."""
+        made = self.sample_path(theme_id)
+        if made.exists():
+            return f"/samples/{theme_id}.jpg?v={int(made.stat().st_mtime)}"
+        if (STATIC_DIR / "samples" / f"{theme_id}.jpg").exists():
+            return f"/static/samples/{theme_id}.jpg"
+        return None
+
+    def _save_sample(self, theme_id: str, image: bytes) -> None:
+        self.sample_path(theme_id).write_bytes(normalize_jpeg(image, SAMPLE_SIZE, 88))
+        self.samples[theme_id] = self._sample_url(theme_id)
+
     # -- connections ----------------------------------------------------------------------
 
-    def snapshot(self) -> dict:
-        def any_camera(role: str) -> bool:
-            return any(c.camera_ready for c in self.clients.values() if c.role == role)
+    def active_camera(self) -> Client | None:
+        """The most recently connected ready camera of the chosen kind."""
+        ready = [c for c in self.clients.values() if c.role == self.prefs.camera_source and c.camera_ready]
+        return max(ready, key=lambda c: c.connected_at) if ready else None
 
+    def snapshot(self) -> dict:
+        camera = self.active_camera()
         return {
             "type": "state",
             "phase": self.phase,
             "message": self.message,
             "prefs": asdict(self.prefs),
             "photo": self.current.public() if self.current else None,
-            "devices": {
-                "operator": sum(c.role == "operator" for c in self.clients.values()),
-                "display": sum(c.role == "display" for c in self.clients.values()),
-                "operator_camera": any_camera("operator"),
-                "display_camera": any_camera("display"),
-            },
+            "qr": self.qr_photo.public() if self.qr_photo else None,
+            "samples": self.samples,
+            "making_samples": self._making_samples,
+            "camera_id": camera.id if camera else None,
+            "preview_wanted": any(c.wants_preview and c is not camera for c in self.clients.values()),
+            "devices": {role: sum(c.role == role for c in self.clients.values()) for role in ROLES},
             "ai_mode": self.ai.mode_label,
         }
 
@@ -137,13 +179,35 @@ class Booth:
 
     async def _send(self, client: Client, message: dict) -> bool:
         try:
-            await client.ws.send_json(message)
+            async with client.send_lock:
+                await client.ws.send_json(message)
             return True
         except Exception:  # socket already gone; the receive loop will clean it up
             return False
 
-    async def broadcast(self, message: dict) -> None:
-        await asyncio.gather(*(self._send(c, message) for c in list(self.clients.values())))
+    async def relay_frame(self, client_id: str, frame: bytes) -> None:
+        """Forward a live preview frame from the active camera to the screens that want it.
+
+        A viewer that is still receiving the previous frame skips this one, so a slow
+        connection never builds up a backlog.
+        """
+        camera = self.active_camera()
+        if not camera or camera.id != client_id or len(frame) > MAX_PREVIEW_FRAME:
+            return
+
+        async def push(viewer: Client) -> None:
+            try:
+                async with viewer.send_lock:
+                    await viewer.ws.send_bytes(frame)
+            except Exception:
+                pass
+
+        viewers = [c for c in self.clients.values() if c.wants_preview and c is not camera]
+        await asyncio.gather(*(push(v) for v in viewers if not v.send_lock.locked()))
+
+    async def broadcast(self, message: dict, role: str | None = None) -> None:
+        targets = [c for c in list(self.clients.values()) if role is None or c.role == role]
+        await asyncio.gather(*(self._send(c, message) for c in targets))
 
     async def broadcast_state(self) -> None:
         await self.broadcast(self.snapshot())
@@ -152,6 +216,9 @@ class Booth:
         client = self.clients.get(client_id)
         if client:
             await self._send(client, {"type": "toast", "level": level, "text": text})
+
+    async def notify_operators(self, text: str, level: str = "info") -> None:
+        await self.broadcast({"type": "toast", "level": level, "text": text}, role="operator")
 
     # -- messages from devices ------------------------------------------------------------
 
@@ -164,10 +231,35 @@ class Booth:
         if kind == "camera":
             client.camera_ready = bool(msg.get("ready"))
             await self.broadcast_state()
-            return
-        if client.role != "operator":
-            return  # the display only reports its camera
+        elif kind == "preview":
+            client.wants_preview = bool(msg.get("want"))
+            await self.broadcast_state()
+        elif client.role == "operator" or self._host_pin_ok(msg.get("pin")):
+            # The guest iPad unlocks host controls with the PIN (one-iPad setups).
+            await self._handle_operator(client, kind, msg)
+        elif client.role == "display":
+            await self._handle_guest(client, kind, msg)
+        elif kind == "start" and self.phase in ("idle", "result", "error"):  # camera's shutter
+            await self.start_countdown(client)
 
+    def _host_pin_ok(self, pin) -> bool:
+        return isinstance(pin, str) and hmac.compare_digest(pin.encode(), self.settings.booth_pin.encode())
+
+    async def _handle_guest(self, client: Client, kind: str, msg: dict) -> None:
+        """Guests can pick a theme and run the camera, but never print or send photos."""
+        if kind == "theme":
+            theme_id = msg.get("theme_id")
+            if theme_id in self.prefs.guest_themes and theme_id != self.prefs.theme_id:
+                self.prefs.theme_id = theme_id
+                self._save_prefs()
+                await self.broadcast_state()
+        elif kind == "start" and self.phase in ("idle", "result", "error"):
+            await self.start_countdown(client)
+        elif kind == "reset" and self.phase in ("result", "error"):
+            await self.reset()
+
+    async def _handle_operator(self, client: Client, kind: str, msg: dict) -> None:
+        photo_id = str(msg.get("photo_id") or "")
         if kind == "prefs":
             self.prefs.update(msg.get("prefs") or {})
             self._save_prefs()
@@ -177,34 +269,28 @@ class Booth:
         elif kind == "reset":
             await self.reset()
         elif kind == "regenerate":
-            await self.regenerate(str(msg.get("photo_id", "")), client_id)
-        elif kind == "show":
-            await self.show(str(msg.get("photo_id", "")), client_id)
+            await self.regenerate(photo_id, client.id)
+        elif kind == "send_qr":
+            await self.send_qr(photo_id or None, client.id)
+        elif kind == "set_sample":
+            await self.set_sample(photo_id, client.id)
+        elif kind == "make_samples":
+            await self.make_samples(photo_id, client.id)
 
     # -- booth actions --------------------------------------------------------------------
-
-    def _pick_capturer(self, requested_by: Client) -> Client | None:
-        if self.prefs.camera_source == "operator":
-            if requested_by.camera_ready:
-                return requested_by
-            role = "operator"
-        else:
-            role = "display"
-        ready = [c for c in self.clients.values() if c.role == role and c.camera_ready]
-        return max(ready, key=lambda c: c.connected_at) if ready else None
 
     async def start_countdown(self, requested_by: Client) -> None:
         if self.phase == "countdown":
             return
-        capturer = self._pick_capturer(requested_by)
+        capturer = self.active_camera()
         if not capturer:
-            where = "this iPad" if self.prefs.camera_source == "operator" else "the display iPad"
-            await self.toast(requested_by.id, f"The camera on {where} isn't ready yet.")
+            where = CAMERA_LABELS[self.prefs.camera_source]
+            await self.toast(requested_by.id, f"The {where} camera isn't ready yet.")
             return
 
         self._countdown_seq += 1
         seq = self._countdown_seq
-        self.phase, self.message, self.current = "countdown", "", None
+        self.phase, self.message, self.current, self.qr_photo = "countdown", "", None, None
         await self.broadcast_state()
         await self.broadcast(
             {"type": "countdown", "seconds": self.prefs.countdown, "capturer": capturer.id, "seq": seq}
@@ -222,9 +308,10 @@ class Booth:
         jpeg = await asyncio.to_thread(normalize_jpeg, image_bytes)
         p = self.prefs
         rec = await asyncio.to_thread(self.store.create, jpeg, p.theme_id, p.custom_prompt, p.orientation)
-        self.current = rec
+        self.current, self.qr_photo = rec, None
         self.phase, self.message = "processing", ""
         await self.broadcast_state()
+        await self.broadcast({"type": "photo", "photo": rec.public()})
         self._spawn(self._generate(rec))
         return rec
 
@@ -239,27 +326,77 @@ class Booth:
         rec.theme_id, rec.custom_prompt = self.prefs.theme_id, self.prefs.custom_prompt
         rec.status, rec.error = "processing", ""
         self.store.save(rec)
-        self.current = rec
+        self.current, self.qr_photo = rec, None
         self.phase, self.message = "processing", ""
         await self.broadcast_state()
         await self.broadcast({"type": "photo", "photo": rec.public()})
         self._spawn(self._generate(rec))
 
-    async def show(self, photo_id: str, client_id: str | None = None) -> None:
-        rec = self.store.get(photo_id)
-        if not rec:
-            if client_id:
-                await self.toast(client_id, "That photo no longer exists.")
-            return
-        self.current = rec
-        self.phase = {"done": "result", "error": "error"}.get(rec.status, "processing")
-        self.message = rec.error
-        await self.broadcast_state()
-
     async def reset(self) -> None:
         self._countdown_seq += 1  # cancels any pending capture watchdog
-        self.phase, self.message, self.current = "idle", "", None
+        self.phase, self.message, self.current, self.qr_photo = "idle", "", None, None
         await self.broadcast_state()
+
+    async def send_qr(self, photo_id: str | None, client_id: str) -> None:
+        """Show (or hide, with no photo_id) a download QR code on the guest screen."""
+        if photo_id is None:
+            self.qr_photo = None
+        else:
+            rec = self.store.get(photo_id)
+            if not rec or rec.status != "done":
+                await self.toast(client_id, "That photo isn't ready to send yet.")
+                return
+            self.qr_photo = rec
+        await self.broadcast_state()
+
+    async def set_sample(self, photo_id: str, client_id: str) -> None:
+        rec = self.store.get(photo_id)
+        if not rec or rec.status != "done" or rec.theme_id == CUSTOM_THEME.id:
+            await self.toast(client_id, "Pick a finished photo from one of the themes first.")
+            return
+        result = self.store.path(rec.id, "result").read_bytes()
+        await asyncio.to_thread(self._save_sample, rec.theme_id, result)
+        await self.broadcast_state()
+        await self.toast(client_id, f"Saved as the sample for {get_theme(rec.theme_id).name}.", "info")
+
+    async def make_samples(self, photo_id: str, client_id: str) -> None:
+        """Restyle one photo in every theme to build the guest carousel's sample pictures."""
+        rec = self.store.get(photo_id)
+        if not rec:
+            await self.toast(client_id, "Pick a photo first.")
+            return
+        if self._making_samples:
+            await self.toast(client_id, "Samples are already being made.", "info")
+            return
+        self._making_samples = True
+        await self.broadcast_state()
+        await self.notify_operators(f"Making samples for {len(THEMES)} themes. This takes a minute or two…")
+        self._spawn(self._make_samples(rec))
+
+    async def _make_samples(self, rec: PhotoRecord) -> None:
+        original = self.store.path(rec.id, "original").read_bytes()
+        ratio = layout_for(rec.orientation)["ai_ratio"]
+        failures: list[str] = []
+
+        async def one(theme) -> None:
+            try:
+                async with self._ai_slots:
+                    raw = await self.ai.transform(original, build_prompt(theme), ratio)
+                await asyncio.to_thread(self._save_sample, theme.id, raw)
+                await self.broadcast_state()
+            except (AIError, ValueError) as exc:
+                log.warning("sample for %s failed: %s", theme.id, exc)
+                failures.append(theme.name)
+
+        try:
+            await asyncio.gather(*(one(t) for t in THEMES))
+        finally:
+            self._making_samples = False
+            await self.broadcast_state()
+        if failures:
+            await self.notify_operators(f"Samples done, but these failed: {', '.join(failures)}.", "error")
+        else:
+            await self.notify_operators("All theme samples are ready.")
 
     async def _generate(self, rec: PhotoRecord) -> None:
         theme = get_theme(rec.theme_id)

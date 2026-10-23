@@ -10,10 +10,10 @@
   <link rel="stylesheet" href="/static/app.css">
   <style>
     body { display: grid; place-items: center; min-height: 100dvh; padding: 24px; background: radial-gradient(circle at 50% 0%, #2a1840, var(--bg) 65%); }
-    .wrap { width: min(860px, 100%); display: grid; gap: 28px; text-align: center; }
+    .wrap { width: min(980px, 100%); display: grid; gap: 28px; text-align: center; }
     h1 { margin: 0; font-size: clamp(36px, 6vw, 56px); letter-spacing: -.02em; }
     .lead { margin: 0; color: var(--muted); font-size: 19px; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
     .card { display: grid; gap: 10px; justify-items: center; padding: 30px 24px; border-radius: 26px; background: var(--panel); border: 1px solid var(--line); color: var(--text); text-decoration: none; transition: transform .1s ease, border-color .2s; }
     .card:active { transform: scale(.98); }
     .card:hover { border-color: var(--primary); }
@@ -30,18 +30,24 @@
       <p class="lead">AI photo booth with themes, prints and AirDrop</p>
     </div>
     <div class="cards">
-      <a class="card" href="/operator">
-        <span class="e">🎛️</span>
-        <h2>Operator iPad</h2>
-        <p>Pick themes, take photos, print and AirDrop.</p>
-      </a>
       <a class="card" href="/display">
         <span class="e">🖥️</span>
-        <h2>Display iPad</h2>
-        <p>Faces the guests: live camera, countdown and the finished photo with a QR code.</p>
+        <h2>Guest screen</h2>
+        <p>iPad facing the guests: theme carousel, live preview, countdown and the finished photo.</p>
+      </a>
+      <a class="card" href="/operator">
+        <span class="e">🎛️</span>
+        <h2>Operator</h2>
+        <p>iPad or laptop: themes, camera, print and send. Can also be the camera.</p>
+      </a>
+      <a class="card" href="/camera">
+        <span class="e">📷</span>
+        <h2>Camera</h2>
+        <p>Use an iPhone, iPad or laptop as the booth camera.</p>
       </a>
     </div>
-    <p class="tip">Tip: open each page in Safari, tap Share → <b>Add to Home Screen</b> for a full-screen app.<br>Both iPads need the booth PIN.</p>
+    <p class="tip"><b>Just one iPad?</b> Open the guest screen and choose “Camera + guest screen”. The ⚙︎ corner button opens a PIN-protected host menu for printing and sending.<br>
+    Tip: in Safari tap Share → <b>Add to Home Screen</b> for a full-screen app. Every device needs the booth PIN.</p>
   </main>
 </body>
 </html>

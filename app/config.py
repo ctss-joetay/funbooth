@@ -11,6 +11,7 @@ from pathlib import Path
 log = logging.getLogger("funbooth")
 
 DEFAULT_MODEL = "bytedance-seed/seedream-5-0-flash"
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 @dataclass(frozen=True)

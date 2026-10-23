@@ -15,18 +15,33 @@
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/display.css">
 </head>
-<body class="display" data-phase="idle">
+<body class="display" data-phase="idle" data-screen="choose">
   <div class="backdrop" aria-hidden="true"></div>
 
   <header class="d-top">
     <div class="d-event" id="event-name">Fun Booth</div>
-    <div class="d-theme"><span id="theme-emoji"></span><span id="theme-name"></span></div>
+    <div class="d-theme" id="theme-chip"><span id="theme-emoji"></span><span id="theme-name"></span></div>
   </header>
 
+  <!-- Step 1: guests browse the themes -->
+  <section class="d-choose">
+    <div class="d-choose-head">
+      <h1>Choose your theme</h1>
+      <p>Swipe to see them all, then tap one</p>
+    </div>
+    <div class="d-carousel-wrap">
+      <button class="d-arrow" id="prev" aria-label="Previous themes">‹</button>
+      <div class="d-carousel" id="carousel"></div>
+      <button class="d-arrow" id="next" aria-label="More themes">›</button>
+    </div>
+  </section>
+
+  <!-- Step 2 onwards: live preview, countdown, creating, result -->
   <main class="d-main">
     <div class="d-stage">
       <div class="d-frame" id="frame">
         <video id="video" playsinline muted autoplay></video>
+        <img id="remote" alt="">
         <img id="still" alt="">
         <div class="d-attract" id="attract">
           <div class="d-attract-emoji" id="attract-emoji"></div>
@@ -36,53 +51,107 @@
         <div class="d-banner" id="banner">Strike a pose! 📸</div>
         <div class="d-count" id="count"></div>
         <div class="d-flash" id="flash"></div>
-        <div class="d-processing" id="processing">
+        <div class="d-processing">
           <div class="spinner"></div>
           <div class="d-proc-text" id="proc-text">Creating your magic…</div>
         </div>
-        <div class="d-error" id="error-box">
+        <div class="d-error">
           <div class="d-error-emoji">🙈</div>
           <div>Oops! Let's try that again.</div>
+          <button class="btn btn-big d-btn-light" id="retry"><span class="ico">📸</span><span>Try again</span></button>
         </div>
       </div>
     </div>
 
-    <aside class="d-side" id="side">
-      <div class="d-side-title">Take me home!</div>
-      <img class="d-qr" id="qr" alt="QR code to download your photo">
-      <div class="d-side-hint" id="qr-hint">Scan with your phone camera</div>
-      <button class="btn btn-big d-airdrop" id="airdrop" hidden><span class="ico">📲</span>AirDrop</button>
+    <aside class="d-side">
+      <div class="d-side-title">Looking good! ✨</div>
+      <p class="d-side-text">Ask the booth host to print or send your photo.</p>
+      <button class="btn btn-big d-btn-light" id="again"><span class="ico">📸</span><span>Take another</span></button>
+      <button class="btn btn-big d-btn-ghost" id="done"><span class="ico">✨</span><span>New theme</span></button>
     </aside>
   </main>
 
-  <button class="d-gear" id="gear" aria-label="Display settings">⚙︎</button>
+  <footer class="d-controls">
+    <button class="btn btn-big d-btn-ghost" id="change-theme"><span class="ico">←</span><span>Change theme</span></button>
+    <button class="btn btn-primary d-shoot" id="shoot"><span class="ico">📸</span><span id="shoot-label">Take my photo!</span></button>
+  </footer>
+
+  <!-- QR code the host sends to the guest screen -->
+  <div class="d-qr-overlay" id="qr-overlay" hidden>
+    <div class="d-qr-card">
+      <div class="d-qr-title">Scan to get your photo</div>
+      <div class="d-qr-row">
+        <img class="d-qr-photo" id="qr-photo" alt="">
+        <img class="d-qr" id="qr" alt="QR code to download your photo">
+      </div>
+      <div class="d-qr-hint">Point your phone camera at the code</div>
+      <button class="btn btn-big btn-primary" id="qr-done">Done</button>
+    </div>
+  </div>
+
+  <button class="d-gear" id="gear" aria-label="Host menu">⚙︎</button>
   <span class="dot d-conn" id="conn" title="Connection"></span>
 
   <div class="d-start" id="start">
     <div class="d-start-card">
       <div class="d-start-emoji">📸</div>
       <h1>Booth display</h1>
-      <p>This iPad faces your guests. Tap start and allow camera access when asked.</p>
-      <button class="btn btn-primary btn-big" id="start-btn">Start display</button>
+      <p>How is this iPad being used?</p>
+      <div class="d-start-options">
+        <button class="d-start-option" data-setup="camera">
+          <span class="e">🤳</span><b>Camera + guest screen</b>
+          <span>This iPad takes the photos and guests see themselves. Works on its own, or with an operator device.</span>
+        </button>
+        <button class="d-start-option" data-setup="screen">
+          <span class="e">🖥️</span><b>Guest screen only</b>
+          <span>Another device takes the photos: the operator iPad, an iPhone or a laptop.</span>
+        </button>
+      </div>
     </div>
   </div>
 
-  <dialog id="settings">
-    <form method="dialog" class="d-settings">
-      <h2>Display settings</h2>
-      <div class="field">Camera on this iPad
-        <div class="segmented" id="facing">
-          <button type="button" data-v="user">Front</button>
-          <button type="button" data-v="environment">Back</button>
+  <!-- Host menu: PIN-protected, so guests can't print or send -->
+  <dialog id="host" class="d-host">
+    <div class="d-host-body">
+      <div class="d-host-head">
+        <h2>Host menu</h2>
+        <button class="btn btn-primary" id="host-close">Done</button>
+      </div>
+      <div class="d-host-main">
+        <div class="d-host-photo">
+          <img id="host-photo" alt="">
+          <div class="d-host-empty" id="host-empty">No photos yet</div>
+        </div>
+        <div class="d-host-actions">
+          <button class="btn btn-primary btn-big" id="host-print"><span class="ico">🖨️</span><span>Print</span></button>
+          <button class="btn btn-big" id="host-airdrop"><span class="ico">📲</span><span>AirDrop</span></button>
+          <button class="btn btn-big" id="host-qr"><span class="ico">🔳</span><span>Show QR to guest</span></button>
         </div>
       </div>
-      <div class="d-settings-row">
-        <button class="btn" type="button" id="fullscreen">Full screen</button>
-        <button class="btn" type="button" id="forget">Lock</button>
-        <button class="btn btn-primary" value="close">Done</button>
+      <div class="d-host-section">
+        <h3>Recent photos</h3>
+        <div class="d-host-strip" id="host-strip"></div>
       </div>
-    </form>
+      <div class="d-host-section">
+        <h3>This iPad</h3>
+        <div class="segmented" id="host-camera">
+          <button type="button" data-v="display">Takes the photos</button>
+          <button type="button" data-v="remote">Guest screen only</button>
+        </div>
+        <div class="segmented" id="facing">
+          <button type="button" data-v="user">Front camera</button>
+          <button type="button" data-v="environment">Back camera</button>
+        </div>
+        <div class="d-host-row">
+          <button class="btn" type="button" id="fullscreen">Full screen</button>
+          <a class="btn" href="/operator">Operator controls</a>
+          <button class="btn" type="button" id="forget">Lock this iPad</button>
+        </div>
+      </div>
+    </div>
   </dialog>
+
+  <div id="print-area"><img id="print-img" alt=""></div>
 
   <script type="module" src="/static/display.js"></script>
 </body>

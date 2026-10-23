@@ -23,32 +23,51 @@ export const forgetPin = () => store(PIN_KEY, null);
 export async function ensurePin() {
   const saved = getPin();
   if (saved && (await checkPin(saved))) return saved;
+  const pin = await askPin({ title: "Enter booth PIN" });
+  store(PIN_KEY, pin);
+  return pin;
+}
 
+/**
+ * Show a PIN prompt and resolve with a PIN the server accepts. With `cancellable`, resolves
+ * null if the person backs out (used to unlock host controls on the guest screen).
+ */
+export function askPin({ title, cancellable = false }) {
   const dialog = document.createElement("dialog");
   dialog.className = "pin-dialog";
   dialog.innerHTML = `
     <form method="dialog">
       <div class="pin-emoji">🔒</div>
-      <h2>Enter booth PIN</h2>
+      <h2></h2>
       <input name="pin" type="password" inputmode="numeric" autocomplete="off" required>
       <p class="pin-error" hidden>That PIN didn't work. Try again.</p>
       <button class="btn btn-primary" value="ok">Unlock</button>
+      <button class="btn btn-ghost pin-cancel" type="button" hidden>Cancel</button>
     </form>`;
+  dialog.querySelector("h2").textContent = title;
   document.body.append(dialog);
-  dialog.addEventListener("cancel", (e) => e.preventDefault());
   dialog.showModal();
   const input = dialog.querySelector("input");
   const error = dialog.querySelector(".pin-error");
+  const cancel = dialog.querySelector(".pin-cancel");
+  cancel.hidden = !cancellable;
 
   return new Promise((resolve) => {
+    const finish = (value) => {
+      dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    dialog.addEventListener("cancel", (e) => {
+      e.preventDefault();
+      if (cancellable) finish(null);
+    });
+    cancel.addEventListener("click", () => finish(null));
     dialog.querySelector("form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const pin = input.value.trim();
       if (await checkPin(pin)) {
-        store(PIN_KEY, pin);
-        dialog.close();
-        dialog.remove();
-        resolve(pin);
+        finish(pin);
       } else {
         error.hidden = false;
         input.select();
@@ -101,7 +120,12 @@ export function connect(role, handlers, onStatus = () => {}) {
       queue.forEach((m) => ws.send(m));
       queue = [];
     };
+    ws.binaryType = "blob";
     ws.onmessage = (event) => {
+      if (typeof event.data !== "string") {
+        handlers.frame?.(event.data); // live preview frame relayed from the camera device
+        return;
+      }
       const msg = JSON.parse(event.data);
       handlers[msg.type]?.(msg);
     };
@@ -128,6 +152,10 @@ export function connect(role, handlers, onStatus = () => {}) {
       const text = JSON.stringify(obj);
       if (ws.readyState === WebSocket.OPEN) ws.send(text);
       else queue.push(text);
+    },
+    /** Preview frames are best-effort: dropped when offline or when the uplink is backed up. */
+    sendFrame(blob) {
+      if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 256 * 1024) ws.send(blob);
     },
   };
 }
@@ -220,7 +248,7 @@ export class Camera {
   }
 
   /** Grab the current frame, centre-cropped to `aspect` (width / height). */
-  capture(aspect, maxSide = 2048) {
+  capture(aspect, maxSide = 2048, quality = 0.92) {
     const vw = this.video.videoWidth;
     const vh = this.video.videoHeight;
     let sw = vw;
@@ -234,7 +262,74 @@ export class Camera {
     canvas.width = Math.round(sw * scale);
     canvas.height = Math.round(sh * scale);
     canvas.getContext("2d").drawImage(this.video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, canvas.width, canvas.height);
-    return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+  }
+}
+
+/**
+ * While this device is the booth camera and a screen wants to watch, send small JPEG
+ * frames (~6 fps) over the booth connection so guests see themselves on the display.
+ */
+export class PreviewStreamer {
+  constructor(camera, link) {
+    this.camera = camera;
+    this.link = link;
+    this.timer = null;
+    this.aspect = 16 / 9;
+  }
+
+  update(active, aspect) {
+    this.aspect = aspect;
+    if (active && !this.timer) {
+      let busy = false;
+      this.timer = setInterval(async () => {
+        if (busy || !this.camera.ready) return;
+        busy = true;
+        try {
+          const frame = await this.camera.capture(this.aspect, 640, 0.6);
+          if (frame && this.timer) this.link.sendFrame(frame);
+        } finally {
+          busy = false;
+        }
+      }, 160);
+    } else if (!active && this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+}
+
+/** Shows relayed preview frames in an <img>; `live` is true while frames keep arriving. */
+export class RemotePreview {
+  constructor(img, onChange = () => {}) {
+    this.img = img;
+    this.onChange = onChange;
+    this.lastFrame = 0;
+    this.url = null;
+    this.reported = false;
+    setInterval(() => {
+      if (this.reported && !this.live) {
+        this.reported = false;
+        this.onChange(false);
+      }
+    }, 500);
+  }
+
+  get live() {
+    return Date.now() - this.lastFrame < 1500;
+  }
+
+  show(blob) {
+    const url = URL.createObjectURL(blob);
+    const previous = this.url;
+    this.url = url;
+    this.img.onload = () => previous && URL.revokeObjectURL(previous);
+    this.img.src = url;
+    this.lastFrame = Date.now();
+    if (!this.reported) {
+      this.reported = true;
+      this.onChange(true);
+    }
   }
 }
 
@@ -324,4 +419,29 @@ export function printUrlFor(photo, prefs) {
   if (!photo?.print_url) return null;
   const key = encodeURIComponent(`${prefs.event_name}|${prefs.print_qr ? 1 : 0}`);
   return `${photo.print_url}&k=${key}`;
+}
+
+/**
+ * Print the framed photo through the browser's print dialog (AirPrint on iPad, any printer
+ * on a laptop). Needs `<div id="print-area"><img id="print-img"></div>` on the page.
+ */
+export async function printPhoto(photo, prefs) {
+  const img = $("#print-img");
+  const url = printUrlFor(photo, prefs);
+  if (img.dataset.src !== url) img.src = img.dataset.src = url;
+  try {
+    await img.decode();
+  } catch {
+    toast("The print image didn't load yet. Try again in a moment.", "error");
+    return;
+  }
+  let pageStyle = $("#page-size");
+  if (!pageStyle) {
+    pageStyle = document.createElement("style");
+    pageStyle.id = "page-size";
+    document.head.append(pageStyle);
+  }
+  const size = photo.orientation === "portrait" ? "4in 6in" : "6in 4in";
+  pageStyle.textContent = `@page { size: ${size}; margin: 0; }`;
+  window.print();
 }

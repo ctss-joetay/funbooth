@@ -11,6 +11,7 @@ from PIL import Image
 from starlette.websockets import WebSocketDisconnect
 
 from app.ai import AIError, ImageAI
+from app.booth import GUEST_THEME_IDS
 from app.config import DEFAULT_MODEL, Settings
 from app.main import create_app
 from app.printing import compose_print
@@ -143,12 +144,28 @@ def client(settings):
         yield c
 
 
-def receive_until(ws, predicate, limit=30):
+def receive_until(ws, predicate, limit=40):
+    """Next JSON message matching `predicate` (binary preview frames are skipped)."""
     for _ in range(limit):
-        msg = ws.receive_json()
-        if predicate(msg):
-            return msg
+        msg = ws.receive()
+        if msg.get("text") is None:
+            continue
+        data = json.loads(msg["text"])
+        if predicate(data):
+            return data
     raise AssertionError("expected message never arrived")
+
+
+def connect(client, role):
+    return client.websocket_connect(f"/ws?role={role}&pin={PIN}")
+
+
+def welcome(ws) -> str:
+    return receive_until(ws, lambda m: m["type"] == "welcome")["client_id"]
+
+
+def is_state(**expected):
+    return lambda m: m["type"] == "state" and all(m.get(k) == v for k, v in expected.items())
 
 
 def test_pin_is_required(client):
@@ -165,36 +182,33 @@ def test_full_capture_flow(client):
     headers = {"X-Booth-Pin": PIN}
     assert client.get("/healthz").json()["ai"].startswith("mock")
 
-    with client.websocket_connect(f"/ws?role=operator&pin={PIN}") as op, client.websocket_connect(f"/ws?role=display&pin={PIN}") as disp:
-        receive_until(op, lambda m: m["type"] == "welcome")
-        display_id = receive_until(disp, lambda m: m["type"] == "welcome")["client_id"]
+    with connect(client, "operator") as op, connect(client, "display") as disp:
+        welcome(op)
+        display_id = welcome(disp)
 
-        # Operator can't shoot until the display camera is on.
+        # The operator's own camera is the default, and it isn't on yet.
         op.send_json({"type": "start"})
-        assert "isn't ready" in receive_until(op, lambda m: m["type"] == "toast")["text"]
+        assert "operator camera isn't ready" in receive_until(op, lambda m: m["type"] == "toast")["text"]
 
+        op.send_json({"type": "prefs", "prefs": {"camera_source": "display", "theme_id": "sun", "event_name": "Joe's Party"}})
         disp.send_json({"type": "camera", "ready": True})
-        receive_until(op, lambda m: m["type"] == "state" and m["devices"]["display_camera"])
-
-        op.send_json({"type": "prefs", "prefs": {"theme_id": "sun", "event_name": "Joe's Party", "countdown": 3}})
-        receive_until(op, lambda m: m["type"] == "state" and m["prefs"]["theme_id"] == "sun")
+        receive_until(op, is_state(camera_id=display_id))
 
         op.send_json({"type": "start"})
         countdown = receive_until(disp, lambda m: m["type"] == "countdown")
         assert countdown["capturer"] == display_id
         assert countdown["seconds"] == 3
 
-        # The display uploads its frame after the countdown.
+        # The camera device uploads its frame after the countdown.
         res = client.post("/api/capture", headers=headers, files={"photo": ("c.jpg", jpeg(1920, 1080))})
         assert res.status_code == 200
         photo_id = res.json()["id"]
 
-        done = receive_until(op, lambda m: m["type"] == "state" and m["phase"] == "result")
-        photo = done["photo"]
+        photo = receive_until(op, is_state(phase="result"))["photo"]
         assert photo["id"] == photo_id
         assert photo["status"] == "done"
         assert photo["theme_id"] == "sun"
-        receive_until(disp, lambda m: m["type"] == "state" and m["phase"] == "result")
+        receive_until(disp, is_state(phase="result"))
 
         assert client.get(photo["result_url"]).headers["content-type"] == "image/jpeg"
         assert client.get(photo["thumb_url"]).status_code == 200
@@ -203,6 +217,10 @@ def test_full_capture_flow(client):
         assert client.get(photo["qr_url"]).headers["content-type"] == "image/svg+xml"
         page = client.get(f"/p/{photo_id}").text
         assert "Joe&#x27;s Party" in page and '"ready": true' in page
+
+        # The operator sends the download QR to the guest screen.
+        op.send_json({"type": "send_qr", "photo_id": photo_id})
+        assert receive_until(disp, lambda m: m["type"] == "state" and m["qr"])["qr"]["id"] == photo_id
 
         # Restyle the same photo with another theme.
         op.send_json({"type": "prefs", "prefs": {"theme_id": "80s"}})
@@ -213,21 +231,96 @@ def test_full_capture_flow(client):
         listed = client.get("/api/photos", headers=headers).json()
         assert [p["id"] for p in listed] == [photo_id]
 
-        op.send_json({"type": "reset"})
-        idle = receive_until(disp, lambda m: m["type"] == "state" and m["phase"] == "idle")
-        assert idle["photo"] is None
+        # Guests clear their own result screen.
+        disp.send_json({"type": "reset"})
+        idle = receive_until(op, is_state(phase="idle"))
+        assert idle["photo"] is None and idle["qr"] is None
 
     # Prefs survive a restart.
     assert json.loads((client.app.state.booth.settings.data_dir / "prefs.json").read_text())["event_name"] == "Joe's Party"
 
 
-def test_display_cannot_control_the_booth(client):
-    with client.websocket_connect(f"/ws?role=display&pin={PIN}") as disp:
-        receive_until(disp, lambda m: m["type"] == "welcome")
+def test_guests_choose_themes_but_cannot_run_the_booth(client):
+    with connect(client, "operator") as op, connect(client, "display") as disp:
+        welcome(op)
+        display_id = welcome(disp)
+
+        disp.send_json({"type": "theme", "theme_id": "90s"})
+        receive_until(op, lambda m: m["type"] == "state" and m["prefs"]["theme_id"] == "90s")
+
+        op.send_json({"type": "prefs", "prefs": {"guest_themes": ["xmas", "winter", "not-a-theme"]}})
+        state = receive_until(disp, lambda m: m["type"] == "state" and m["prefs"]["guest_themes"] != GUEST_THEME_IDS)
+        assert state["prefs"]["guest_themes"] == ["winter", "xmas"]  # catalogue order, unknown ids dropped
+
+        # Hidden themes, operator-only messages and prefs without the PIN are all ignored.
+        disp.send_json({"type": "theme", "theme_id": "sun"})
         disp.send_json({"type": "prefs", "prefs": {"event_name": "hacked"}})
-        disp.send_json({"type": "camera", "ready": True})
-        state = receive_until(disp, lambda m: m["type"] == "state" and m["devices"]["display_camera"])
+        disp.send_json({"type": "send_qr", "photo_id": "0" * 32})
+        disp.send_json({"type": "theme", "theme_id": "xmas"})
+        state = receive_until(disp, lambda m: m["type"] == "state" and m["prefs"]["theme_id"] == "xmas")
         assert state["prefs"]["event_name"] == "Test Party"
+
+        # With the PIN (the host menu on a one-iPad booth) the guest screen can change settings.
+        disp.send_json({"type": "prefs", "pin": PIN, "prefs": {"camera_source": "display"}})
+        disp.send_json({"type": "camera", "ready": True})
+        receive_until(disp, is_state(camera_id=display_id))
+
+        # Guests start the countdown themselves, but can't cancel it.
+        disp.send_json({"type": "start"})
+        assert receive_until(disp, lambda m: m["type"] == "countdown")["capturer"] == display_id
+        disp.send_json({"type": "reset"})
+        op.send_json({"type": "prefs", "prefs": {"countdown": 5}})
+        assert receive_until(op, lambda m: m["type"] == "state" and m["prefs"]["countdown"] == 5)["phase"] == "countdown"
+
+
+def test_phone_camera_streams_preview_to_guest_screen(client):
+    with connect(client, "operator") as op, connect(client, "display") as disp, connect(client, "camera") as cam:
+        welcome(op)
+        welcome(disp)
+        camera_id = welcome(cam)
+
+        op.send_json({"type": "prefs", "prefs": {"camera_source": "camera"}})
+        cam.send_json({"type": "camera", "ready": True})
+        receive_until(op, is_state(camera_id=camera_id))
+
+        disp.send_json({"type": "preview", "want": True})
+        receive_until(cam, is_state(preview_wanted=True))
+
+        frame = jpeg(64, 36)
+        cam.send_bytes(frame)
+        for _ in range(40):
+            msg = disp.receive()
+            if msg.get("bytes") is not None:
+                assert msg["bytes"] == frame
+                break
+        else:
+            raise AssertionError("preview frame never reached the guest screen")
+
+        # The phone's shutter button starts the countdown and the phone shoots.
+        cam.send_json({"type": "start"})
+        assert receive_until(disp, lambda m: m["type"] == "countdown")["capturer"] == camera_id
+
+
+def test_theme_samples(client):
+    headers = {"X-Booth-Pin": PIN}
+    with connect(client, "operator") as op:
+        welcome(op)
+        photo_id = client.post("/api/capture", headers=headers, files={"photo": ("c.jpg", jpeg(1920, 1080))}).json()["id"]
+        photo = receive_until(op, is_state(phase="result"))["photo"]
+        assert photo["theme_id"] == "winter"
+
+        op.send_json({"type": "set_sample", "photo_id": photo_id})
+        state = receive_until(op, lambda m: m["type"] == "state" and m["samples"]["winter"])
+        assert client.get(state["samples"]["winter"]).headers["content-type"] == "image/jpeg"
+        assert state["samples"]["sun"] is None
+
+        op.send_json({"type": "make_samples", "photo_id": photo_id})
+        receive_until(op, is_state(making_samples=True))
+        done = receive_until(op, is_state(making_samples=False), limit=200)
+        assert all(done["samples"][t] for t in GUEST_THEME_IDS)
+        assert "All theme samples are ready" in receive_until(op, lambda m: m["type"] == "toast")["text"]
+
+    assert client.get("/samples/nope.jpg").status_code == 404
 
 
 def test_bad_uploads_and_unknown_photos(client):
