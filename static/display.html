@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Booth Display">
+  <meta name="theme-color" content="#0d0e12">
+  <link rel="manifest" href="/static/display.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="icon" href="/static/icon-180.png">
+  <title>Fun Booth · Display</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/display.css">
+</head>
+<body class="display" data-phase="idle">
+  <div class="backdrop" aria-hidden="true"></div>
+
+  <header class="d-top">
+    <div class="d-event" id="event-name">Fun Booth</div>
+    <div class="d-theme"><span id="theme-emoji"></span><span id="theme-name"></span></div>
+  </header>
+
+  <main class="d-main">
+    <div class="d-stage">
+      <div class="d-frame" id="frame">
+        <video id="video" playsinline muted autoplay></video>
+        <img id="still" alt="">
+        <div class="d-attract" id="attract">
+          <div class="d-attract-emoji" id="attract-emoji"></div>
+          <div class="d-attract-title" id="attract-title"></div>
+          <div class="d-attract-tag" id="attract-tag"></div>
+        </div>
+        <div class="d-banner" id="banner">Strike a pose! 📸</div>
+        <div class="d-count" id="count"></div>
+        <div class="d-flash" id="flash"></div>
+        <div class="d-processing" id="processing">
+          <div class="spinner"></div>
+          <div class="d-proc-text" id="proc-text">Creating your magic…</div>
+        </div>
+        <div class="d-error" id="error-box">
+          <div class="d-error-emoji">🙈</div>
+          <div>Oops! Let's try that again.</div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="d-side" id="side">
+      <div class="d-side-title">Take me home!</div>
+      <img class="d-qr" id="qr" alt="QR code to download your photo">
+      <div class="d-side-hint" id="qr-hint">Scan with your phone camera</div>
+      <button class="btn btn-big d-airdrop" id="airdrop" hidden><span class="ico">📲</span>AirDrop</button>
+    </aside>
+  </main>
+
+  <button class="d-gear" id="gear" aria-label="Display settings">⚙︎</button>
+  <span class="dot d-conn" id="conn" title="Connection"></span>
+
+  <div class="d-start" id="start">
+    <div class="d-start-card">
+      <div class="d-start-emoji">📸</div>
+      <h1>Booth display</h1>
+      <p>This iPad faces your guests. Tap start and allow camera access when asked.</p>
+      <button class="btn btn-primary btn-big" id="start-btn">Start display</button>
+    </div>
+  </div>
+
+  <dialog id="settings">
+    <form method="dialog" class="d-settings">
+      <h2>Display settings</h2>
+      <div class="field">Camera on this iPad
+        <div class="segmented" id="facing">
+          <button type="button" data-v="user">Front</button>
+          <button type="button" data-v="environment">Back</button>
+        </div>
+      </div>
+      <div class="d-settings-row">
+        <button class="btn" type="button" id="fullscreen">Full screen</button>
+        <button class="btn" type="button" id="forget">Lock</button>
+        <button class="btn btn-primary" value="close">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="/static/display.js"></script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Booth Operator">
+  <meta name="theme-color" content="#0d0e12">
+  <link rel="manifest" href="/static/operator.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="icon" href="/static/icon-180.png">
+  <title>Fun Booth · Operator</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/operator.css">
+  <style id="page-size"></style>
+</head>
+<body class="operator" data-phase="idle">
+  <header class="o-top">
+    <div class="o-brand"><span class="o-logo">📸</span><span id="event-name">Fun Booth</span></div>
+    <div class="o-status">
+      <span class="chip"><span class="dot" id="dot-link"></span>Server</span>
+      <span class="chip"><span class="dot" id="dot-display"></span>Display</span>
+      <span class="chip"><span class="dot" id="dot-camera"></span><span id="camera-label">Camera</span></span>
+      <span class="chip chip-ai" id="ai-mode" title="AI model"></span>
+    </div>
+    <button class="btn btn-ghost o-icon" id="open-settings" aria-label="Settings"><span class="ico">⚙️</span></button>
+  </header>
+
+  <main class="o-main">
+    <section class="o-themes">
+      <h2 class="o-h">Theme</h2>
+      <div class="o-theme-grid" id="theme-grid"></div>
+      <label class="field o-prompt">
+        <span id="prompt-label">Extra details (optional)</span>
+        <textarea id="custom-prompt" rows="2" placeholder="e.g. add a birthday cake and balloons"></textarea>
+      </label>
+    </section>
+
+    <section class="o-stage-col">
+      <div class="o-stage">
+        <div class="o-frame" id="frame">
+          <video id="video" playsinline muted autoplay></video>
+          <img id="still" alt="">
+          <div class="o-placeholder" id="placeholder">
+            <div class="o-ph-emoji" id="ph-emoji">🖥️</div>
+            <div class="o-ph-title" id="ph-title">Live camera is on the display iPad</div>
+            <div class="o-ph-sub" id="ph-sub">Tap “Take photo” when your guests are ready.</div>
+          </div>
+          <div class="o-count" id="count"></div>
+          <div class="o-busy" id="busy"><div class="spinner"></div><div>Creating with AI…</div></div>
+          <div class="o-err" id="err"><div class="o-err-emoji">⚠️</div><div id="err-text"></div></div>
+          <div class="o-phase" id="phase-label">Ready</div>
+        </div>
+      </div>
+
+      <div class="o-actions">
+        <button class="btn btn-primary btn-big o-shoot" id="shoot"><span class="ico">📸</span><span>Take photo</span></button>
+        <button class="btn btn-big" id="restyle"><span class="ico">🔁</span><span>Restyle</span></button>
+        <button class="btn btn-big" id="print"><span class="ico">🖨️</span><span>Print</span></button>
+        <button class="btn btn-big" id="share"><span class="ico">📲</span><span>AirDrop</span></button>
+        <button class="btn btn-big" id="next"><span class="ico">⏭️</span><span>Next guest</span></button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="o-gallery">
+    <div class="o-gallery-head">
+      <h2 class="o-h">Recent photos</h2>
+      <span class="o-muted">Tap one to show it on the display</span>
+    </div>
+    <div class="o-strip" id="strip"><div class="o-empty">Photos you take will appear here.</div></div>
+  </footer>
+
+  <!-- Print preview -->
+  <dialog id="print-dialog" class="o-print-dialog">
+    <div class="o-print-body">
+      <img id="print-preview" alt="Print preview">
+      <div class="o-print-side">
+        <h2>Print preview</h2>
+        <p class="o-muted" id="print-size">6 × 4 in, landscape</p>
+        <button class="btn btn-primary btn-big" id="do-print"><span class="ico">🖨️</span><span>Print</span></button>
+        <button class="btn btn-big" id="print-share"><span class="ico">📲</span><span>AirDrop</span></button>
+        <button class="btn btn-big btn-ghost" id="close-print">Close</button>
+        <p class="o-hint">In the print dialog choose your AirPrint photo printer, the 4×6 paper size and the number of copies.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Settings -->
+  <dialog id="settings">
+    <form method="dialog" class="o-settings">
+      <div class="o-settings-head">
+        <h2>Booth settings</h2>
+        <button class="btn btn-primary" value="close">Done</button>
+      </div>
+
+      <label class="field">Event name (printed on every photo)
+        <input type="text" id="set-event" maxlength="80" placeholder="e.g. Sarah & Tom's Wedding">
+      </label>
+
+      <div class="field">Which iPad takes the photo?
+        <div class="segmented" data-pref="camera_source">
+          <button type="button" data-v="display">Display iPad</button>
+          <button type="button" data-v="operator">This iPad</button>
+        </div>
+      </div>
+
+      <div class="field" id="facing-field">This iPad's camera
+        <div class="segmented" id="facing">
+          <button type="button" data-v="environment">Back</button>
+          <button type="button" data-v="user">Front</button>
+        </div>
+      </div>
+
+      <div class="field">Countdown
+        <div class="segmented" data-pref="countdown">
+          <button type="button" data-v="0">Off</button>
+          <button type="button" data-v="3">3 s</button>
+          <button type="button" data-v="5">5 s</button>
+          <button type="button" data-v="10">10 s</button>
+        </div>
+      </div>
+
+      <div class="field">Print layout
+        <div class="segmented" data-pref="orientation">
+          <button type="button" data-v="landscape">Landscape 6×4</button>
+          <button type="button" data-v="portrait">Portrait 4×6</button>
+        </div>
+      </div>
+
+      <label class="switch">QR code on prints <input type="checkbox" data-pref="print_qr"></label>
+      <label class="switch">QR code on the display <input type="checkbox" data-pref="show_qr"></label>
+
+      <div class="o-settings-tools">
+        <label class="btn" for="upload"><span class="ico">🖼️</span>Use a photo from this iPad</label>
+        <input type="file" id="upload" accept="image/*" hidden>
+        <button class="btn" type="button" id="test-ai"><span class="ico">🧪</span>Test AI connection</button>
+        <a class="btn" href="/display" target="_blank" rel="noopener"><span class="ico">🖥️</span>Open display here</a>
+        <button class="btn" type="button" id="lock"><span class="ico">🔒</span>Lock</button>
+      </div>
+      <p class="o-muted o-test-result" id="test-result"></p>
+    </form>
+  </dialog>
+
+  <div id="print-area"><img id="print-img" alt=""></div>
+
+  <script type="module" src="/static/operator.js"></script>
+</body>
+</html>

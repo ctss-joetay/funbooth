@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0e12">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="icon" href="/static/icon-180.png">
+  <title>Fun Booth</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    body { display: grid; place-items: center; min-height: 100dvh; padding: 24px; background: radial-gradient(circle at 50% 0%, #2a1840, var(--bg) 65%); }
+    .wrap { width: min(860px, 100%); display: grid; gap: 28px; text-align: center; }
+    h1 { margin: 0; font-size: clamp(36px, 6vw, 56px); letter-spacing: -.02em; }
+    .lead { margin: 0; color: var(--muted); font-size: 19px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+    .card { display: grid; gap: 10px; justify-items: center; padding: 30px 24px; border-radius: 26px; background: var(--panel); border: 1px solid var(--line); color: var(--text); text-decoration: none; transition: transform .1s ease, border-color .2s; }
+    .card:active { transform: scale(.98); }
+    .card:hover { border-color: var(--primary); }
+    .card .e { font-size: 60px; }
+    .card h2 { margin: 0; font-size: 26px; }
+    .card p { margin: 0; color: var(--muted); line-height: 1.45; }
+    .tip { color: var(--muted); font-size: 15px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div>
+      <h1>📸 Fun Booth</h1>
+      <p class="lead">AI photo booth with themes, prints and AirDrop</p>
+    </div>
+    <div class="cards">
+      <a class="card" href="/operator">
+        <span class="e">🎛️</span>
+        <h2>Operator iPad</h2>
+        <p>Pick themes, take photos, print and AirDrop.</p>
+      </a>
+      <a class="card" href="/display">
+        <span class="e">🖥️</span>
+        <h2>Display iPad</h2>
+        <p>Faces the guests: live camera, countdown and the finished photo with a QR code.</p>
+      </a>
+    </div>
+    <p class="tip">Tip: open each page in Safari, tap Share → <b>Add to Home Screen</b> for a full-screen app.<br>Both iPads need the booth PIN.</p>
+  </main>
+</body>
+</html>

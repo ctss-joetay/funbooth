@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0e12">
+  <meta name="robots" content="noindex">
+  <title>{{TITLE}} · Your photo</title>
+  <link rel="icon" href="/static/icon-180.png">
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    body { min-height: 100dvh; padding: max(20px, env(safe-area-inset-top)) 16px 32px; background: radial-gradient(circle at 50% 0%, #2a1840, var(--bg) 60%); -webkit-user-select: auto; user-select: auto; }
+    main { width: min(720px, 100%); margin: 0 auto; display: grid; gap: 18px; text-align: center; }
+    h1 { margin: 0; font-size: 28px; }
+    .sub { margin: 0; color: var(--muted); }
+    .photo { width: 100%; border-radius: 18px; box-shadow: 0 20px 50px rgba(0, 0, 0, .5); background: #000; -webkit-touch-callout: default; }
+    .actions { display: grid; gap: 10px; }
+    .actions .btn { text-decoration: none; width: 100%; }
+    .hint { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0; }
+    .wait { display: grid; justify-items: center; gap: 16px; padding: 40px 0; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <div>
+      <h1 id="event"></h1>
+      <p class="sub" id="theme"></p>
+    </div>
+    <div id="ready" hidden>
+      <img class="photo" id="photo" alt="Your photo booth picture">
+    </div>
+    <div class="actions" id="actions" hidden>
+      <button class="btn btn-primary btn-big" id="save">📥 Save to my phone</button>
+      <a class="btn" id="dl-plain" download>Download photo</a>
+      <a class="btn" id="dl-print" download>Download framed version</a>
+      <p class="hint">On iPhone you can also press and hold the photo, then tap “Save to Photos”.</p>
+    </div>
+    <div class="wait" id="wait" hidden>
+      <div class="spinner"></div>
+      <div>Your photo is still being created… this page will refresh.</div>
+    </div>
+  </main>
+  <script type="application/json" id="data">{{DATA}}</script>
+  <script>
+    const data = JSON.parse(document.getElementById("data").textContent);
+    const $ = (id) => document.getElementById(id);
+    $("event").textContent = data.event_name || "Fun Booth";
+    $("theme").textContent = data.theme_name;
+
+    if (!data.ready) {
+      $("wait").hidden = false;
+      setTimeout(() => location.reload(), 5000);
+    } else {
+      $("ready").hidden = $("actions").hidden = false;
+      $("photo").src = data.result_url;
+      $("dl-plain").href = data.result_url;
+      $("dl-plain").download = `${data.file_stem}.jpg`;
+      $("dl-print").href = data.print_url;
+      $("dl-print").download = `${data.file_stem}-print.jpg`;
+
+      let files = null;
+      const fetchFile = (url, name) => fetch(url).then((r) => r.blob()).then((b) => new File([b], name, { type: "image/jpeg" }));
+      Promise.all([fetchFile(data.result_url, `${data.file_stem}.jpg`), fetchFile(data.print_url, `${data.file_stem}-print.jpg`)])
+        .then((f) => { files = f; })
+        .catch(() => {});
+
+      $("save").addEventListener("click", async () => {
+        if (files && navigator.canShare?.({ files })) {
+          try { await navigator.share({ files }); } catch {}
+        } else {
+          $("dl-plain").click();
+        }
+      });
+    }
+  </script>
+</body>
+</html>
