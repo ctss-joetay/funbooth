@@ -38,32 +38,23 @@ def to_data_url(jpeg_bytes: bytes) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(jpeg_bytes).decode("ascii")
 
 
-def images_payload(model: str, prompt: str, data_url: str, aspect_ratio: str, resolution: str) -> dict:
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "input_references": [{"type": "image_url", "image_url": {"url": data_url}}],
-        "aspect_ratio": aspect_ratio,
-        "n": 1,
-    }
+def images_payload(model: str, prompt: str, data_url: str | None, aspect_ratio: str, resolution: str) -> dict:
+    payload = {"model": model, "prompt": prompt, "aspect_ratio": aspect_ratio, "n": 1}
+    if data_url:
+        payload["input_references"] = [{"type": "image_url", "image_url": {"url": data_url}}]
     if resolution:
         payload["resolution"] = resolution
     return payload
 
 
-def chat_payload(model: str, prompt: str, data_url: str, aspect_ratio: str) -> dict:
+def chat_payload(model: str, prompt: str, data_url: str | None, aspect_ratio: str) -> dict:
+    content = [{"type": "text", "text": prompt}]
+    if data_url:
+        content.append({"type": "image_url", "image_url": {"url": data_url}})
     return {
         "model": model,
         "modalities": ["image", "text"],
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": data_url}},
-                ],
-            }
-        ],
+        "messages": [{"role": "user", "content": content}],
         "image_config": {"aspect_ratio": aspect_ratio},
     }
 
@@ -102,8 +93,15 @@ class ImageAI:
         """Return the edited image as raw bytes (PNG or JPEG)."""
         if self.settings.mock_ai:
             return await self._mock(image_jpeg, prompt)
+        return await self._request(prompt, to_data_url(image_jpeg), aspect_ratio)
 
-        data_url = to_data_url(image_jpeg)
+    async def create(self, prompt: str, aspect_ratio: str) -> bytes:
+        """Text-to-image, with no input photo (used to make demo photos for samples)."""
+        if self.settings.mock_ai:
+            return await self._mock(_blank_jpeg(aspect_ratio), prompt)
+        return await self._request(prompt, None, aspect_ratio)
+
+    async def _request(self, prompt: str, data_url: str | None, aspect_ratio: str) -> bytes:
         mode = self._working_mode or self.settings.api_mode
         if mode == "chat":
             return await self._via_chat(prompt, data_url, aspect_ratio)
@@ -141,7 +139,7 @@ class ImageAI:
         except httpx.HTTPError as exc:
             raise AIError(f"Could not reach OpenRouter: {exc}") from exc
 
-    async def _via_images(self, prompt: str, data_url: str, aspect_ratio: str) -> bytes:
+    async def _via_images(self, prompt: str, data_url: str | None, aspect_ratio: str) -> bytes:
         payload = images_payload(self.settings.model, prompt, data_url, aspect_ratio, self.settings.resolution)
         resp = await self._post("/images", payload)
         if resp.status_code in _SHAPE_ERRORS:
@@ -159,7 +157,7 @@ class ImageAI:
             return await self._fetch_image(item["url"])
         raise _ShapeRejected("unrecognised /images response")
 
-    async def _via_chat(self, prompt: str, data_url: str, aspect_ratio: str) -> bytes:
+    async def _via_chat(self, prompt: str, data_url: str | None, aspect_ratio: str) -> bytes:
         payload = chat_payload(self.settings.model, prompt, data_url, aspect_ratio)
         resp = await self._post("/chat/completions", payload)
         if resp.status_code >= 400:
@@ -196,6 +194,13 @@ class ImageAI:
 
 class _ShapeRejected(AIError):
     """The endpoint did not accept or understand our request shape."""
+
+
+def _blank_jpeg(aspect_ratio: str) -> bytes:
+    w, h = (int(x) for x in aspect_ratio.split(":"))
+    buf = io.BytesIO()
+    Image.new("RGB", (1024, round(1024 * h / w)), (128, 128, 128)).save(buf, "JPEG")
+    return buf.getvalue()
 
 
 def _mock_effect(image_jpeg: bytes, prompt: str) -> bytes:

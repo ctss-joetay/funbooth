@@ -63,8 +63,10 @@ To add samples:
 - **⭐ Use as theme sample:** on any finished photo in the operator view.
 - **Settings → Make samples for every theme from the selected photo:** restyles one
   good shot (e.g. your team) in every theme. This is one AI image per theme, ~10 in total.
-- **Built-in defaults:** add `static/samples/<theme id>.jpg` files to the repo, e.g.
-  `static/samples/winter.jpg`. Samples made in the app take priority.
+- **Built-in defaults:** run `OPENROUTER_API_KEY=... python scripts/make_samples.py`. It
+  creates a demo photo of fictional guests, restyles it in every theme and saves
+  `static/samples/<theme id>.jpg`. Add `--photo team.jpg` to use your own photo instead.
+  Commit the files to ship them with the app. Samples made in the app take priority.
 
 ## Run it locally (no API key needed)
 

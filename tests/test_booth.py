@@ -109,6 +109,24 @@ def test_auto_mode_falls_back_to_chat_and_remembers(settings):
     assert calls == ["/api/v1/images", "/api/v1/chat/completions", "/api/v1/chat/completions"]
 
 
+def test_text_to_image_sends_no_input_photo(settings):
+    bodies = []
+    out = jpeg(color=(4, 5, 6))
+
+    def handler(request: httpx.Request):
+        bodies.append(json.loads(request.content))
+        if request.url.path.endswith("/images"):
+            return httpx.Response(422, json={"error": {"message": "nope"}})
+        url = "data:image/jpeg;base64," + base64.b64encode(out).decode()
+        return httpx.Response(200, json={"choices": [{"message": {"images": [{"image_url": {"url": url}}]}}]})
+
+    ai = ImageAI(replace(settings, openrouter_api_key="sk-test"), httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    assert run(ai.create("four friends at a party", "16:9")) == out
+    images_body, chat_body = bodies
+    assert "input_references" not in images_body and images_body["prompt"] == "four friends at a party"
+    assert chat_body["messages"][0]["content"] == [{"type": "text", "text": "four friends at a party"}]
+
+
 def test_billing_errors_are_reported_without_fallback(settings):
     calls = []
 
