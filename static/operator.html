@@ -19,6 +19,7 @@
   <header class="o-top">
     <div class="o-brand"><span class="o-logo">📸</span><span id="event-name">Fun Booth</span></div>
     <div class="o-status">
+      <span class="chip" id="mode-chip"></span>
       <span class="chip"><span class="dot" id="dot-link"></span>Server</span>
       <span class="chip"><span class="dot" id="dot-display"></span>Guest screen</span>
       <span class="chip"><span class="dot" id="dot-camera"></span><span id="camera-label">Camera</span></span>
@@ -132,13 +133,20 @@
         <input type="text" id="set-event" maxlength="80" placeholder="e.g. Sarah & Tom's Wedding">
       </label>
 
-      <div class="field">Which device takes the photo?
-        <div class="segmented" data-pref="camera_source">
-          <button type="button" data-v="operator">This device</button>
-          <button type="button" data-v="display">Guest iPad</button>
-          <button type="button" data-v="camera">Phone / other</button>
+      <div class="field">Booth mode
+        <div class="segmented" data-pref="mode">
+          <button type="button" data-v="solo">One iPad</button>
+          <button type="button" data-v="laptop">iPad + laptop + camera</button>
+          <button type="button" data-v="two_ipads">Two iPads</button>
         </div>
-        <span class="o-field-hint" id="camera-hint"></span>
+        <span class="o-field-hint" id="mode-hint"></span>
+      </div>
+
+      <div class="field" id="laptop-camera-field">Which camera takes the photo?
+        <div class="segmented" data-pref="camera_source">
+          <button type="button" data-v="camera">Phone (camera page)</button>
+          <button type="button" data-v="operator">This laptop's camera</button>
+        </div>
       </div>
 
       <div class="field" id="facing-field">This device's camera

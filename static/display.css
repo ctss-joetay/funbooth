@@ -234,11 +234,11 @@ body[data-screen="result"] .d-side { display: flex; animation: slidein .5s ease 
   position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; overflow-y: auto;
   background: radial-gradient(circle at 50% 30%, #2a1840, #0d0e12 70%); color: #fff; padding: 24px;
 }
-.d-start-card { text-align: center; max-width: 760px; display: grid; gap: 14px; justify-items: center; }
+.d-start-card { text-align: center; max-width: 980px; display: grid; gap: 14px; justify-items: center; }
 .d-start-card h1 { margin: 0; font-size: 40px; }
 .d-start-card p { margin: 0 0 6px; color: var(--muted); font-size: 19px; }
 .d-start-emoji { font-size: 72px; }
-.d-start-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; width: 100%; }
+.d-start-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; width: 100%; }
 .d-start-option {
   display: grid; gap: 8px; justify-items: center; text-align: center; padding: 26px 22px;
   border-radius: 24px; border: 1px solid var(--line); background: var(--panel); color: var(--text);

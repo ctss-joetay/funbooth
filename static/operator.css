@@ -90,6 +90,10 @@ body[data-stage="photo-done"][data-view="video"] #stage-video { display: block; 
 .o-actions .btn:not(.o-shoot) .ico { font-size: 24px; }
 .o-actions .btn span:last-child { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .o-shoot { font-size: 22px !important; }
+@media (max-width: 1300px) {
+  .o-actions .o-shoot { flex-direction: column; gap: 4px; font-size: 17px !important; }
+  .o-actions .o-shoot .ico { font-size: 26px; }
+}
 
 /* Gallery ---------------------------------------------------------------------------- */
 .o-gallery { border-top: 1px solid var(--line); background: var(--panel); padding: 10px 16px 14px; display: grid; gap: 8px; }

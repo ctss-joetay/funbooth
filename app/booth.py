@@ -34,6 +34,11 @@ log = logging.getLogger("funbooth.booth")
 
 ROLES = {"operator", "display", "camera"}
 CAMERA_LABELS = {"operator": "operator", "display": "guest iPad", "camera": "phone"}
+# The three ways to run the booth, and the camera each one uses by default:
+#   solo       one iPad: guest screen + camera, printing/sending via the PIN host menu
+#   laptop     guest iPad + operator laptop + a phone on /camera (or the laptop's camera)
+#   two_ipads  guest iPad + operator iPad, which takes the photos
+MODES = {"solo": "display", "laptop": "camera", "two_ipads": "operator"}
 THEME_IDS = {t.id for t in THEMES} | {CUSTOM_THEME.id}
 GUEST_THEME_IDS = [t.id for t in THEMES]  # Custom needs a typed prompt, so it's operator-only
 CAPTURE_GRACE_SECONDS = 20  # how long after the countdown we wait for the photo upload
@@ -50,6 +55,7 @@ class Prefs:
     event_name: str = "Fun Booth"
     theme_id: str = THEMES[0].id
     custom_prompt: str = ""
+    mode: str = "two_ipads"  # see MODES
     camera_source: str = "operator"  # which device shoots: operator | display | camera (phone)
     countdown: int = 3
     orientation: str = "landscape"  # print layout: landscape (6x4) | portrait (4x6)
@@ -64,8 +70,19 @@ class Prefs:
             self.theme_id = data["theme_id"]
         if "custom_prompt" in data:
             self.custom_prompt = str(data["custom_prompt"])[:600]
+        if data.get("mode") in MODES:
+            self.mode = data["mode"]
+            self.camera_source = MODES[self.mode]
         if data.get("camera_source") in CAMERA_LABELS:
             self.camera_source = data["camera_source"]
+            # Keep the mode consistent with the chosen camera. In laptop mode the laptop's
+            # own (or a USB) camera is allowed instead of a phone.
+            if self.camera_source == "display":
+                self.mode = "solo"
+            elif self.camera_source == "camera":
+                self.mode = "laptop"
+            elif self.mode == "solo":
+                self.mode = "two_ipads"
         if "countdown" in data:
             try:
                 self.countdown = max(0, min(10, int(data["countdown"])))

@@ -12,6 +12,7 @@ const GUEST_SCREEN = {
   error: "Guest screen: error",
 };
 const CAMERA_NAMES = { operator: "This device", display: "Guest iPad", camera: "Phone" };
+const MODE_NAMES = { solo: "📱 One iPad", laptop: "💻 iPad + laptop", two_ipads: "📱📱 Two iPads" };
 const CUSTOM_COLORS = { frame: "#2a2d3a", accent: "#7c5cff", ink: "#ffffff" };
 
 const els = {
@@ -151,6 +152,7 @@ function render() {
   $("#dot-display").classList.toggle("on", devices.display > 0);
   $("#dot-camera").classList.toggle("on", !!state.camera_id);
   $("#camera-label").textContent = `${CAMERA_NAMES[prefs.camera_source]} camera`;
+  $("#mode-chip").textContent = MODE_NAMES[prefs.mode];
   $("#ai-mode").textContent = `AI: ${state.ai_mode}`;
 
   // Themes + prompt
@@ -218,7 +220,7 @@ function renderPlaceholder(prefs, devices) {
       ? `Open ${location.host}/display on the guest iPad.`
       : state.camera_id
         ? "Guests pick a theme and tap “Take my photo”, or tap Take photo here."
-        : "Tap “Camera + guest screen” on the guest iPad and allow camera access.";
+        : "Choose “One iPad” on the guest iPad's start screen and allow camera access.";
   } else {
     emoji = "📱";
     title = !devices.camera ? "No phone camera connected" : state.camera_id ? "The phone is the camera" : "Phone camera isn't started";
@@ -538,11 +540,12 @@ function syncSettings() {
   $$("#settings input[type=checkbox][data-pref]").forEach((box) => (box.checked = !!prefs[box.dataset.pref]));
   $$("#facing button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === camera.facing)));
   $("#facing-field").hidden = prefs.camera_source !== "operator";
-  $("#camera-hint").textContent = {
-    operator: "This iPad or laptop's camera. Its live view is shown to guests on the guest screen.",
-    display: "The guest iPad's front camera. Also the setting for a single iPad doing everything.",
-    camera: `Open ${location.host}/camera on an iPhone or other device to use it as the camera.`,
-  }[prefs.camera_source];
+  $("#laptop-camera-field").hidden = prefs.mode !== "laptop";
+  $("#mode-hint").textContent = {
+    solo: "The guest iPad is the camera and guest screen. Print and send from its ⚙︎ host menu (PIN). This page is optional.",
+    laptop: `The guest iPad shows the live preview. Open ${location.host}/camera on a phone, or use this laptop's built-in or USB camera.`,
+    two_ipads: "The guest iPad shows the live preview and this iPad takes the photos. Point its back camera at the guests.",
+  }[prefs.mode];
 
   $$("#guest-themes .o-chip").forEach((c) => c.setAttribute("aria-pressed", String(prefs.guest_themes.includes(c.dataset.id))));
 

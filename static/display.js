@@ -91,9 +91,16 @@ const streamer = new PreviewStreamer(camera, link);
 
 // -- start screen: choose how this iPad is used -----------------------------------------
 
+const NEXT_STEPS = {
+  solo: "All set. To print or send, tap ⚙︎ in the top-right corner and enter the PIN.",
+  laptop: `Now open ${location.host}/operator on the laptop and ${location.host}/camera on the phone.`,
+  two_ipads: `Now open ${location.host}/operator on the operator iPad.`,
+};
+
 $$(".d-start-option").forEach((btn) =>
   btn.addEventListener("click", () => {
-    setCameraSource(btn.dataset.setup === "camera" ? "display" : "remote", getPin());
+    setMode(btn.dataset.mode, getPin());
+    toast(NEXT_STEPS[btn.dataset.mode]);
     started = true;
     $("#start").hidden = true;
     goFullscreen();
@@ -102,11 +109,9 @@ $$(".d-start-option").forEach((btn) =>
   }),
 );
 
-/** "remote" keeps whichever other device is chosen, or falls back to the operator device. */
-function setCameraSource(choice, pin) {
-  const current = state?.prefs.camera_source;
-  const source = choice === "display" ? "display" : current === "display" || !current ? "operator" : current;
-  if (source !== current) link.send({ type: "prefs", pin, prefs: { camera_source: source } });
+/** Switch booth mode; the server picks the matching camera. Needs the PIN. */
+function setMode(mode, pin) {
+  if (state?.prefs.mode !== mode) link.send({ type: "prefs", pin, prefs: { mode } });
 }
 
 function goFullscreen() {
@@ -135,9 +140,7 @@ function render() {
   els.body.dataset.screen = screen;
   els.body.style.setProperty("--ar", aspectFor(prefs.orientation));
   els.body.classList.toggle("portrait-photos", prefs.orientation === "portrait");
-  $$(".d-start-option").forEach((b) =>
-    b.classList.toggle("current", (b.dataset.setup === "camera") === cameraHere),
-  );
+  $$(".d-start-option").forEach((b) => b.classList.toggle("current", b.dataset.mode === prefs.mode));
 
   $("#event-name").textContent = prefs.event_name || "Fun Booth";
   const name = theme.id === "custom" ? "Something special" : theme.name;
@@ -509,8 +512,7 @@ function renderHost() {
     strip.append(btn);
   }
 
-  const cameraHere = state.prefs.camera_source === "display";
-  $$("#host-camera button").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.v === "display") === cameraHere)));
+  $$("#host-mode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === state.prefs.mode)));
   $$("#facing button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === camera.facing)));
 }
 
@@ -532,9 +534,9 @@ $("#host-qr").addEventListener("click", () => {
   render();
 });
 
-$$("#host-camera button").forEach((btn) =>
+$$("#host-mode button").forEach((btn) =>
   btn.addEventListener("click", () => {
-    setCameraSource(btn.dataset.v, hostPin);
+    setMode(btn.dataset.v, hostPin);
     setTimeout(renderHost, 300);
   }),
 );

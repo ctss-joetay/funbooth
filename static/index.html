@@ -9,45 +9,70 @@
   <title>Fun Booth</title>
   <link rel="stylesheet" href="/static/app.css">
   <style>
-    body { display: grid; place-items: center; min-height: 100dvh; padding: 24px; background: radial-gradient(circle at 50% 0%, #2a1840, var(--bg) 65%); }
-    .wrap { width: min(980px, 100%); display: grid; gap: 28px; text-align: center; }
+    body { min-height: 100dvh; padding: 32px 16px; background: radial-gradient(circle at 50% 0%, #2a1840, var(--bg) 65%); }
+    .wrap { width: min(1080px, 100%); margin: 0 auto; display: grid; gap: 28px; text-align: center; }
     h1 { margin: 0; font-size: clamp(36px, 6vw, 56px); letter-spacing: -.02em; }
     .lead { margin: 0; color: var(--muted); font-size: 19px; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
-    .card { display: grid; gap: 10px; justify-items: center; padding: 30px 24px; border-radius: 26px; background: var(--panel); border: 1px solid var(--line); color: var(--text); text-decoration: none; transition: transform .1s ease, border-color .2s; }
-    .card:active { transform: scale(.98); }
-    .card:hover { border-color: var(--primary); }
-    .card .e { font-size: 60px; }
-    .card h2 { margin: 0; font-size: 26px; }
-    .card p { margin: 0; color: var(--muted); line-height: 1.45; }
-    .tip { color: var(--muted); font-size: 15px; line-height: 1.5; }
+    h2.section { margin: 8px 0 -8px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; text-align: left; }
+    .mode { display: grid; gap: 12px; align-content: start; padding: 26px 24px; border-radius: 26px; background: var(--panel); border: 1px solid var(--line); }
+    .mode .e { font-size: 44px; line-height: 1; }
+    .mode h3 { margin: 0; font-size: 23px; }
+    .mode p { margin: 0; color: var(--muted); line-height: 1.45; }
+    .steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+    .steps li { display: flex; gap: 10px; align-items: baseline; line-height: 1.4; }
+    .steps b { flex: none; min-width: 112px; }
+    .steps a { color: var(--text); font-weight: 700; }
+    .pages { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+    .pages .btn { text-decoration: none; }
+    .tip { color: var(--muted); font-size: 15px; line-height: 1.5; margin: 0; }
   </style>
 </head>
 <body>
   <main class="wrap">
     <div>
       <h1>📸 Fun Booth</h1>
-      <p class="lead">AI photo booth with themes, prints and AirDrop</p>
+      <p class="lead">AI photo booth with themes, prints, GIFs and video clips</p>
     </div>
-    <div class="cards">
-      <a class="card" href="/display">
-        <span class="e">🖥️</span>
-        <h2>Guest screen</h2>
-        <p>iPad facing the guests: theme carousel, live preview, countdown and the finished photo.</p>
-      </a>
-      <a class="card" href="/operator">
-        <span class="e">🎛️</span>
-        <h2>Operator</h2>
-        <p>iPad or laptop: themes, camera, print and send. Can also be the camera.</p>
-      </a>
-      <a class="card" href="/camera">
-        <span class="e">📷</span>
-        <h2>Camera</h2>
-        <p>Use an iPhone, iPad or laptop as the booth camera.</p>
-      </a>
+
+    <h2 class="section">Pick a booth mode</h2>
+    <div class="modes">
+      <section class="mode">
+        <div class="e">📱</div>
+        <h3>One iPad</h3>
+        <p>One iPad does everything: camera, guest screen, printing and sending.</p>
+        <ol class="steps">
+          <li><b>iPad</b><span>Open <a href="/display">Guest screen</a> → choose <i>One iPad</i>. Print and send from the ⚙︎ host menu (PIN).</span></li>
+        </ol>
+      </section>
+      <section class="mode">
+        <div class="e">💻</div>
+        <h3>iPad + laptop + camera</h3>
+        <p>Guests see themselves on the iPad; the operator works from a laptop; a phone takes the photos (or the laptop's built-in or USB camera).</p>
+        <ol class="steps">
+          <li><b>iPad</b><span>Open <a href="/display">Guest screen</a> → choose <i>iPad + laptop + camera</i></span></li>
+          <li><b>Laptop</b><span>Open <a href="/operator">Operator</a> to print and send</span></li>
+          <li><b>Phone</b><span>Open <a href="/camera">Camera</a> → Start camera</span></li>
+        </ol>
+      </section>
+      <section class="mode">
+        <div class="e">📱📱</div>
+        <h3>Two iPads</h3>
+        <p>Guests see themselves on one iPad; the operator's iPad takes the photos, prints and sends.</p>
+        <ol class="steps">
+          <li><b>Guest iPad</b><span>Open <a href="/display">Guest screen</a> → choose <i>Two iPads</i></span></li>
+          <li><b>Operator iPad</b><span>Open <a href="/operator">Operator</a> and point its back camera at the guests</span></li>
+        </ol>
+      </section>
     </div>
-    <p class="tip"><b>Just one iPad?</b> Open the guest screen and choose “Camera + guest screen”. The ⚙︎ corner button opens a PIN-protected host menu for printing and sending.<br>
-    Tip: in Safari tap Share → <b>Add to Home Screen</b> for a full-screen app. Every device needs the booth PIN.</p>
+
+    <div class="pages">
+      <a class="btn" href="/display">🖥️ Guest screen</a>
+      <a class="btn" href="/operator">🎛️ Operator</a>
+      <a class="btn" href="/camera">📷 Camera</a>
+    </div>
+    <p class="tip">Every device needs the booth PIN. You can switch modes any time in Operator → Settings or the guest screen's host menu.<br>
+    Tip: in Safari tap Share → <b>Add to Home Screen</b> for a full-screen app.</p>
   </main>
 </body>
 </html>

@@ -13,7 +13,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.ai import AIError, ImageAI
 from app.reveal import make_reveal_gif
 from app.video import VideoAI
-from app.booth import GUEST_THEME_IDS
+from app.booth import GUEST_THEME_IDS, Prefs
 from app.config import DEFAULT_MODEL, Settings
 from app.main import create_app
 from app.printing import compose_print
@@ -359,6 +359,43 @@ def test_full_capture_flow(client):
 
     # Prefs survive a restart.
     assert json.loads((client.app.state.booth.settings.data_dir / "prefs.json").read_text())["event_name"] == "Joe's Party"
+
+
+def test_booth_modes_pick_the_camera():
+    prefs = Prefs()
+    assert (prefs.mode, prefs.camera_source) == ("two_ipads", "operator")
+    prefs.update({"mode": "solo"})
+    assert prefs.camera_source == "display"
+    prefs.update({"mode": "laptop"})
+    assert prefs.camera_source == "camera"
+    prefs.update({"camera_source": "operator"})  # laptop's own or USB camera
+    assert prefs.mode == "laptop"
+    prefs.update({"mode": "two_ipads"})
+    assert prefs.camera_source == "operator"
+    prefs.update({"camera_source": "display"})
+    assert prefs.mode == "solo"
+    prefs.update({"camera_source": "operator"})
+    assert prefs.mode == "two_ipads"
+
+    saved_before_modes = Prefs()
+    saved_before_modes.update({"camera_source": "camera"})
+    assert saved_before_modes.mode == "laptop"
+
+
+def test_each_mode_shoots_with_its_camera(client):
+    with connect(client, "operator") as op, connect(client, "display") as disp, connect(client, "camera") as cam:
+        ids = {"operator": welcome(op), "display": welcome(disp), "camera": welcome(cam)}
+        for ws in (op, disp, cam):
+            ws.send_json({"type": "camera", "ready": True})
+        expected = {"solo": "display", "laptop": "camera", "two_ipads": "operator"}
+        for mode, device in expected.items():
+            # The guest iPad's start screen sends the mode with the PIN.
+            disp.send_json({"type": "prefs", "pin": PIN, "prefs": {"mode": mode}})
+            receive_until(op, lambda m, mode=mode, cam_id=ids[device]: m["type"] == "state" and m["prefs"]["mode"] == mode and m["camera_id"] == cam_id)
+            disp.send_json({"type": "start"})
+            assert receive_until(op, lambda m: m["type"] == "countdown")["capturer"] == ids[device]
+            op.send_json({"type": "reset"})
+            receive_until(op, is_state(phase="idle"))
 
 
 def test_guests_choose_themes_but_cannot_run_the_booth(client):

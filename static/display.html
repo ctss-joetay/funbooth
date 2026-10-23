@@ -102,15 +102,19 @@
     <div class="d-start-card">
       <div class="d-start-emoji">📸</div>
       <h1>Booth display</h1>
-      <p>How is this iPad being used?</p>
+      <p>Pick the booth mode</p>
       <div class="d-start-options">
-        <button class="d-start-option" data-setup="camera">
-          <span class="e">🤳</span><b>Camera + guest screen</b>
-          <span>This iPad takes the photos and guests see themselves. Works on its own, or with an operator device.</span>
+        <button class="d-start-option" data-mode="solo">
+          <span class="e">📱</span><b>One iPad</b>
+          <span>This iPad does everything: camera, guest screen, printing and sending (host menu behind the PIN).</span>
         </button>
-        <button class="d-start-option" data-setup="screen">
-          <span class="e">🖥️</span><b>Guest screen only</b>
-          <span>Another device takes the photos: the operator iPad, an iPhone or a laptop.</span>
+        <button class="d-start-option" data-mode="laptop">
+          <span class="e">💻</span><b>iPad + laptop + camera</b>
+          <span>This iPad is the guest screen. The operator uses a laptop, and a phone (or the laptop's camera) takes the photos.</span>
+        </button>
+        <button class="d-start-option" data-mode="two_ipads">
+          <span class="e">📱📱</span><b>Two iPads</b>
+          <span>This iPad is the guest screen. The operator's iPad takes the photos, prints and sends.</span>
         </button>
       </div>
     </div>
@@ -140,10 +144,11 @@
         <div class="d-host-strip" id="host-strip"></div>
       </div>
       <div class="d-host-section">
-        <h3>This iPad</h3>
-        <div class="segmented" id="host-camera">
-          <button type="button" data-v="display">Takes the photos</button>
-          <button type="button" data-v="remote">Guest screen only</button>
+        <h3>Booth mode</h3>
+        <div class="segmented" id="host-mode">
+          <button type="button" data-v="solo">One iPad</button>
+          <button type="button" data-v="laptop">iPad + laptop + camera</button>
+          <button type="button" data-v="two_ipads">Two iPads</button>
         </div>
         <div class="segmented" id="facing">
           <button type="button" data-v="user">Front camera</button>

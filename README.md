@@ -11,20 +11,23 @@ Music Festival · Lunar New Year · Festival of Lights · Christmas Cheer · Tot
 90s Throwback · Y2K 2000s · Red Carpet · Fashion Shoot · Black & White Studio ·
 Custom (operator types any scene)
 
-## Pick a setup
+## Three booth modes
 
-| Setup | Guest screen (`/display`) | Camera | Print & send |
+Pick the mode on the guest iPad's start screen. You can switch later in **Operator →
+Settings → Booth mode** or in the guest iPad's PIN-protected host menu. The landing
+page (`/`) lists which page to open on each device.
+
+| Mode | Guest screen | Camera | Print & send |
 |---|---|---|---|
-| **One iPad does everything** | the iPad (choose “Camera + guest screen”) | the same iPad's front camera | PIN-protected host menu on the iPad (⚙︎ corner) |
-| **Operator iPad is the camera** | second iPad (“Guest screen only”) | operator iPad (`/operator`) | operator iPad |
-| **Phone as the camera** | iPad (“Guest screen only”) | iPhone or any device (`/camera`) | operator iPad or laptop (`/operator`) |
-| **Laptop operator** | iPad (“Guest screen only”) | laptop webcam, or a phone on `/camera` | laptop, which can print to any installed printer |
+| **📱 One iPad** | the iPad (`/display`) | the same iPad's front camera | host menu on the iPad (⚙︎ corner + PIN) |
+| **💻 iPad + laptop + camera** | iPad (`/display`) | a phone on `/camera`, or the laptop's built-in or USB camera | laptop (`/operator`), any installed printer |
+| **📱📱 Two iPads** | guest iPad (`/display`) | operator iPad's back camera | operator iPad (`/operator`), AirPrint |
 
-Choose the camera in the operator's **Settings → Which device takes the photo?**
-(This device / Guest iPad / Phone or other). The camera page and the guest screen's
-start screen can also set it. When the camera is on another device, it streams a live
-preview to the guest screen (about 6 low-res frames a second through the server), so
-guests still see themselves while posing.
+Choosing a mode sets the camera automatically. When the camera is on another device, it
+streams a live preview to the guest screen (about 6 low-res frames a second through the
+server), so guests still see themselves while posing. In every mode, guests pick the
+theme and can press **Take my photo!** themselves. Only the operator, or the host menu
+in one-iPad mode, can print or send.
 
 ```
    Guest screen (iPad)               Camera (any one)             Operator (iPad or laptop)
@@ -182,21 +185,21 @@ Keep the service at **one replica**: the live booth state is held in memory.
 ## Setting up the devices
 
 **Guest screen** (the iPad facing the guests)
-1. In Safari open `https://<your-app>/display`, enter the PIN, then choose
-   **Camera + guest screen** or **Guest screen only**.
+1. In Safari open `https://<your-app>/display`, enter the PIN, then pick the
+   booth mode: **One iPad**, **iPad + laptop + camera** or **Two iPads**.
 2. For a full-screen kiosk, tap Share → **Add to Home Screen** and launch it from there.
 3. Set Settings → Display & Brightness → **Auto-Lock → Never**, and turn on
    **Guided Access** (Settings → Accessibility) so guests can't leave the app.
 4. The faint ⚙︎ in the top-right corner asks for the PIN, then opens the **host menu**:
    - print, AirDrop or show a QR code for any recent photo
-   - choose whether this iPad is the camera, and front or back camera
+   - switch booth mode, and front or back camera
    - links to full screen and the operator controls
 
 **Operator** (iPad or laptop): open `https://<your-app>/operator`.
 - Check that the status chips show **Server**, **Guest screen** and the camera in green.
 - ⚙️ Settings covers:
   - event name and print layout
-  - which device takes the photo, and the countdown length
+  - booth mode (and, in laptop mode, phone or laptop camera), and the countdown length
   - which themes guests can choose
   - theme samples
   - uploading a photo instead of using the camera
