@@ -133,6 +133,20 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); backdrop-filter: blur(6px); -w
 
 video.mirrored { transform: scaleX(-1); }
 
+/* Full-body framing guide: heads below the top line, feet above the bottom line. */
+.fb-guide {
+  position: absolute; inset: 4% 3%; pointer-events: none;
+  border-top: 3px dashed rgba(255, 255, 255, .8); border-bottom: 3px dashed rgba(255, 255, 255, .8);
+}
+.fb-guide::before, .fb-guide::after {
+  position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap;
+  padding: 4px 12px; border-radius: 99px; background: rgba(0, 0, 0, .55); color: #fff;
+  font: 700 14px var(--font);
+}
+.fb-guide::before { content: "Top of heads"; top: 8px; }
+.fb-guide::after { content: "Feet 👟"; bottom: 8px; }
+.fb-badge { position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 99px; background: rgba(0, 0, 0, .55); color: #fff; font: 700 12px var(--font); }
+
 /* Print: only the print image, edge to edge ------------------------------------------ */
 #print-area { display: none; }
 @media print {

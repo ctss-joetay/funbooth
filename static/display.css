@@ -153,6 +153,8 @@ body[data-screen="result"].revealing .d-wipe { visibility: visible; transition: 
   color: #fff; font-size: clamp(20px, 3vw, 30px); font-weight: 800; white-space: nowrap;
 }
 
+.fb-guide:not([hidden]) ~ .d-banner { bottom: 64px; }
+
 .d-count {
   position: absolute; inset: 0; display: grid; place-items: center;
   font-size: min(60cqh, 42cqw); font-weight: 900; color: #fff; line-height: 1;

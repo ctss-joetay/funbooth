@@ -6,9 +6,10 @@ through themes with sample pictures, pick one and strike a pose. The AI (ByteDan
 gets a free **before/after GIF**, and the operator can turn any photo into a short
 **AI video clip**. Only the operator can print or send photos, GIFs and clips to guests.
 
-**Themes included:** Winter Wonderland · Holidays in the Sun · Music Festival ·
-Lunar New Year · Festival of Lights · Christmas Cheer · Totally 80s · 90s Throwback ·
-Y2K 2000s · Red Carpet · Custom (operator types any scene)
+**Themes included:** Winter Wonderland · Holidays in the Sun · Mountain Adventure ·
+Music Festival · Lunar New Year · Festival of Lights · Christmas Cheer · Totally 80s ·
+90s Throwback · Y2K 2000s · Red Carpet · Fashion Shoot · Black & White Studio ·
+Custom (operator types any scene)
 
 ## Pick a setup
 
@@ -58,6 +59,35 @@ guests still see themselves while posing.
    - **Restyle:** re-runs the selected photo with another theme.
    - **🎬 Video:** animates the selected photo into a short clip (see below).
 
+## Keeping faces accurate and making it look real
+
+Every prompt (`app/themes.py`) is built from the same parts. The wording follows proven
+"change the location" photo-editing prompts:
+
+1. **Face lock.** Everyone stays clearly recognisable. The prompt preserves each person's
+   facial structure, eyes, nose, mouth, skin tone, natural facial details, skin texture,
+   age, expression and body proportions. It forbids beautifying, slimming, smoothing,
+   de-aging or swapping faces, and keeps the same people in the same poses.
+2. **Framing.** Keep the original camera angle. **Full-body** themes (👟 on the cards) also
+   ask for people shown head to toe with their feet on the ground, at a believable scale
+   for the place.
+3. **The scene,** written like a photographer's brief: location, time of day, light
+   direction, outfits for every person.
+4. **Place integration** for themes set somewhere else. It completely replaces the
+   background and matches lighting, shadows, reflections, perspective, atmosphere,
+   weather and colour temperature. Everyone is dressed for the place, so no one ends up
+   in a cocktail dress on a mountain.
+5. **Realism.** "Genuinely photographed there with a professional camera", with natural
+   skin texture, contact shadows and subtle depth of field. Polished but believable, not
+   over-edited, and no text or logos.
+
+For the most realistic far-away places, **capture people head to toe**. On full-body
+themes the guest screen, the phone camera and the operator's live view show head and
+feet guide lines and "Step back: head to toe". If only the upper body is in shot, the AI
+won't invent legs; it keeps the framing. Cameras capture up to 2560 px so faces keep
+their detail when guests stand further back. Photos are generated at 2K, and face
+detail at that size held up well in testing (see the samples).
+
 ## Before/after GIFs and video clips
 
 - **Before/after GIF (free, instant):** the server makes it with Pillow. The real photo
@@ -85,7 +115,8 @@ guests still see themselves while posing.
 ## Theme samples
 
 The app ships with real samples in `static/samples/`. They were made by Seedream from a
-demo photo of four fictional guests (`_original.jpg`) restyled into every theme. To
+full-length demo photo of four fictional guests (`_original.jpg`) restyled into every
+theme, using the same prompts the booth uses. To
 replace them:
 - **⭐ Use as theme sample:** on any finished photo in the operator view.
 - **Settings → Make samples for every theme from the selected photo:** restyles one
@@ -210,8 +241,10 @@ use **AirDrop / Share → the printer's app** or **Save Image**, then print from
 
 Themes live in [`app/themes.py`](app/themes.py). Each one has:
 - a name, emoji and tagline
-- the scene prompt
+- the scene prompt, plus a motion line for video clips
 - three print-frame colours
+- `full_body`: asks guests to step back, and asks the AI for head-to-toe framing
+- `place`: the theme moves people somewhere else, so the place-integration rules apply
 
 Add an entry, redeploy, and it appears on the operator screen and the guest carousel.
 To narrow the list for an event (e.g. only winter and Christmas themes), use **Settings →

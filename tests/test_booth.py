@@ -17,7 +17,7 @@ from app.booth import GUEST_THEME_IDS
 from app.config import DEFAULT_MODEL, Settings
 from app.main import create_app
 from app.printing import compose_print
-from app.themes import IDENTITY_GUARD, build_prompt, get_theme
+from app.themes import FULL_BODY_FRAMING, IDENTITY_GUARD, KEEP_FRAMING, PLACE_INTEGRATION, REALISM, THEMES, build_prompt, get_theme
 
 PIN = "1234"
 
@@ -51,14 +51,19 @@ def settings(tmp_path) -> Settings:
 # -- prompts -----------------------------------------------------------------------------
 
 
-def test_prompts_keep_identity_and_append_extras():
+def test_prompts_lock_faces_and_fit_the_place():
     winter = build_prompt(get_theme("winter"), "add a snowman")
-    assert winter.startswith(IDENTITY_GUARD)
-    assert "snowy winter landscape" in winter
-    assert winter.endswith("Also: add a snowman")
+    assert winter.startswith(IDENTITY_GUARD) and winter.endswith(REALISM)
+    assert FULL_BODY_FRAMING in winter and PLACE_INTEGRATION in winter
+    assert "snowy pine forest" in winter and "Also: add a snowman" in winter
+
+    noir = build_prompt(get_theme("noir"))
+    assert KEEP_FRAMING in noir and FULL_BODY_FRAMING not in noir and PLACE_INTEGRATION not in noir
+    assert "black and white" in noir
 
     custom = build_prompt(get_theme("custom"), "a pirate ship deck")
-    assert custom == IDENTITY_GUARD + "a pirate ship deck"
+    assert custom == IDENTITY_GUARD + KEEP_FRAMING + "a pirate ship deck" + REALISM
+    assert {"fashion", "noir", "mountains"} <= {t.id for t in THEMES}
     assert get_theme("does-not-exist").id == "winter"
 
 

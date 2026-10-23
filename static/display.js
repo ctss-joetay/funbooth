@@ -49,6 +49,7 @@ themes = await loadThemes();
 
 const remote = new RemotePreview(els.remote, (live) => {
   els.body.classList.toggle("has-remote", live);
+  render();
 });
 
 const link = connect(
@@ -155,7 +156,12 @@ function render() {
   $("#attract-emoji").textContent = theme.emoji || "📸";
   $("#attract-title").textContent = name || "Fun Booth";
   $("#attract-tag").textContent = attractText(cameraHere);
-  $("#banner").textContent = cameraHere ? "Strike a pose! 📸" : "Look at the camera! 📸";
+  // Far-away places only look real with everyone in shot head to toe.
+  const fullBody = !!theme.full_body && (screen === "pose" || screen === "countdown");
+  $("#guide").hidden = !fullBody || !(camera.stream || els.body.classList.contains("has-remote"));
+  $("#banner").textContent = theme.full_body
+    ? "Step back: head to toe in the shot 👟"
+    : cameraHere ? "Strike a pose! 📸" : "Look at the camera! 📸";
   els.shoot.disabled = !state.camera_id;
   $("#shoot-label").textContent = state.camera_id ? "Take my photo!" : "Waiting for the camera…";
 
@@ -273,6 +279,7 @@ function themeCard(theme) {
     imgBox.innerHTML = `<div class="d-card-art"><span></span></div>`;
     imgBox.querySelector("span").textContent = theme.emoji;
   }
+  if (theme.full_body) imgBox.insertAdjacentHTML("beforeend", `<span class="fb-badge">👟 Full body</span>`);
   card.querySelector(".d-card-name").textContent = `${theme.emoji} ${theme.id === "custom" ? "Something special" : theme.name}`;
   card.querySelector(".d-card-tag").textContent = theme.tagline;
   card.addEventListener("click", () => pickTheme(theme.id));

@@ -16,7 +16,7 @@ from pathlib import Path
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 _ID_RE = re.compile(r"^[0-9a-f]{32}$")
-MAX_SIDE = 2048
+MAX_SIDE = 2560  # full-body group shots need the pixels for faces
 
 
 @dataclass

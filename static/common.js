@@ -225,7 +225,7 @@ export class Camera {
     }
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      video: { facingMode: facing, width: { ideal: 2560 }, height: { ideal: 1440 } },
     });
     const stream = this.stream;
     stream.getVideoTracks()[0]?.addEventListener("ended", () => {
@@ -248,7 +248,7 @@ export class Camera {
   }
 
   /** Grab the current frame, centre-cropped to `aspect` (width / height). */
-  capture(aspect, maxSide = 2048, quality = 0.92) {
+  capture(aspect, maxSide = 2560, quality = 0.92) {
     const vw = this.video.videoWidth;
     const vh = this.video.videoHeight;
     let sw = vw;

@@ -73,7 +73,9 @@ function render() {
   if (camera.error) status.textContent = "Camera blocked: allow access, then tap 🔄";
   else if (prefs.camera_source !== "camera") status.textContent = "Standby: the operator has chosen a different camera";
   else if (!active) status.textContent = camera.ready ? "Standby: another camera device is active" : "Starting camera…";
-  else status.textContent = { processing: "Creating the photo…", result: "Done! It's on the guest screen" }[phase] || "Booth camera · live";
+  else status.textContent = { processing: "Creating the photo…", result: "Done! It's on the guest screen" }[phase]
+    || (theme?.full_body ? "Full body theme: frame everyone head to toe 👟" : "Booth camera · live");
+  $("#guide").hidden = !theme?.full_body || !camera.stream || phase === "processing";
 
   $("#shutter").disabled = !active || phase === "countdown" || phase === "processing";
 }

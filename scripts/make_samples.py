@@ -3,8 +3,9 @@
     OPENROUTER_API_KEY=sk-or-... python scripts/make_samples.py
     OPENROUTER_API_KEY=sk-or-... python scripts/make_samples.py --photo team.jpg
 
-Without --photo, the model first creates a demo photo of fictional guests and then restyles
-that same group in every theme, so the carousel shows one group transformed each time.
+Without --photo, the model first creates a full-length demo photo of fictional guests and
+then restyles that same group in every theme, so the carousel shows one group transformed
+each time. Full-length shots let the "far-away place" themes keep realistic proportions.
 Results go to static/samples/<theme id>.jpg, which the app serves as default samples
 (samples made in the operator's settings still take priority).
 """
@@ -27,10 +28,13 @@ from app.storage import normalize_jpeg  # noqa: E402
 from app.themes import THEMES, build_prompt  # noqa: E402
 
 DEMO_GROUP = (
-    "A candid, photorealistic photo booth picture of four smiling friends in their 20s to 40s "
-    "of different ethnicities, two women and two men, standing close together and facing the "
-    "camera, waist-up, smart casual party clothes, plain light grey studio backdrop, soft even "
-    "lighting, sharp focus. Fictional people."
+    "A candid, photorealistic full-length photo of four friends standing side by side on the "
+    "floor of a plain light grey photo studio, facing the camera and fully visible from head to "
+    "toe including their shoes. From left to right: an East Asian woman in her 30s with a short "
+    "black bob, a tall Black man in his 40s with glasses and a short grey-flecked beard, a South "
+    "Asian woman in her 20s with long wavy dark hair, and a freckled white man in his 30s with "
+    "red hair. Smart casual party clothes, soft even lighting, sharp focus, shot from chest "
+    "height with a 35 mm lens. Fictional people."
 )
 MAX_PARALLEL = 3
 
