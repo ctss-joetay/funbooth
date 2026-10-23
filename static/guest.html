@@ -13,7 +13,9 @@
     main { width: min(720px, 100%); margin: 0 auto; display: grid; gap: 18px; text-align: center; }
     h1 { margin: 0; font-size: 28px; }
     .sub { margin: 0; color: var(--muted); }
-    .photo { width: 100%; border-radius: 18px; box-shadow: 0 20px 50px rgba(0, 0, 0, .5); background: #000; -webkit-touch-callout: default; }
+    .photo { width: 100%; border-radius: 18px; box-shadow: 0 20px 50px rgba(0, 0, 0, .5); background: #000; -webkit-touch-callout: default; display: block; }
+    .media { display: grid; gap: 14px; }
+    .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; margin: 6px 0 -6px; text-align: left; }
     .actions { display: grid; gap: 10px; }
     .actions .btn { text-decoration: none; width: 100%; }
     .hint { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0; }
@@ -26,13 +28,21 @@
       <h1 id="event"></h1>
       <p class="sub" id="theme"></p>
     </div>
-    <div id="ready" hidden>
+    <div class="media" id="ready" hidden>
+      <p class="hint" id="video-pending" hidden>🎬 Your video is on its way. This page will update by itself.</p>
+      <div class="label" id="video-label" hidden>Your video</div>
+      <video class="photo" id="video" muted loop playsinline autoplay controls hidden></video>
+      <div class="label">Your photo</div>
       <img class="photo" id="photo" alt="Your photo booth picture">
+      <div class="label">Before / after</div>
+      <img class="photo" id="gif" alt="Before and after animation">
     </div>
     <div class="actions" id="actions" hidden>
       <button class="btn btn-primary btn-big" id="save">📥 Save to my phone</button>
       <a class="btn" id="dl-plain" download>Download photo</a>
       <a class="btn" id="dl-print" download>Download framed version</a>
+      <a class="btn" id="dl-gif" download>Download before/after GIF</a>
+      <a class="btn" id="dl-video" download hidden>Download video</a>
       <p class="hint">On iPhone you can also press and hold the photo, then tap “Save to Photos”.</p>
     </div>
     <div class="wait" id="wait" hidden>
@@ -57,10 +67,30 @@
       $("dl-plain").download = `${data.file_stem}.jpg`;
       $("dl-print").href = data.print_url;
       $("dl-print").download = `${data.file_stem}-print.jpg`;
+      $("gif").src = data.reveal_url;
+      $("dl-gif").href = data.reveal_url;
+      $("dl-gif").download = `${data.file_stem}-before-after.gif`;
+      if (data.video_pending) {
+        $("video-pending").hidden = false;
+        setTimeout(() => location.reload(), 10000);
+      }
+      if (data.video_url) {
+        $("video").poster = data.result_url;
+        $("video").src = data.video_url;
+        $("video").hidden = $("video-label").hidden = $("dl-video").hidden = false;
+        $("dl-video").href = data.video_url;
+        $("dl-video").download = `${data.file_stem}.mp4`;
+      }
 
       let files = null;
-      const fetchFile = (url, name) => fetch(url).then((r) => r.blob()).then((b) => new File([b], name, { type: "image/jpeg" }));
-      Promise.all([fetchFile(data.result_url, `${data.file_stem}.jpg`), fetchFile(data.print_url, `${data.file_stem}-print.jpg`)])
+      const wanted = [
+        [data.print_url, `${data.file_stem}-print.jpg`, "image/jpeg"],
+        [data.result_url, `${data.file_stem}.jpg`, "image/jpeg"],
+        [data.reveal_url, `${data.file_stem}-before-after.gif`, "image/gif"],
+      ];
+      if (data.video_url) wanted.push([data.video_url, `${data.file_stem}.mp4`, "video/mp4"]);
+      const fetchFile = ([url, name, type]) => fetch(url).then((r) => r.blob()).then((b) => new File([b], name, { type }));
+      Promise.all(wanted.map(fetchFile))
         .then((f) => { files = f; })
         .catch(() => {});
 

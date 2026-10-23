@@ -11,6 +11,8 @@ from PIL import Image
 from starlette.websockets import WebSocketDisconnect
 
 from app.ai import AIError, ImageAI
+from app.reveal import make_reveal_gif
+from app.video import VideoAI
 from app.booth import GUEST_THEME_IDS
 from app.config import DEFAULT_MODEL, Settings
 from app.main import create_app
@@ -35,6 +37,10 @@ def settings(tmp_path) -> Settings:
         api_mode="auto",
         resolution="2K",
         timeout_seconds=10,
+        video_models=("bytedance/seedance-1-5-pro", "x-ai/grok-imagine-video-1.5-lite"),
+        video_resolution="720p",
+        video_seconds=5,
+        video_timeout_seconds=30,
         booth_pin=PIN,
         default_event_name="Test Party",
         data_dir=tmp_path,
@@ -140,6 +146,98 @@ def test_billing_errors_are_reported_without_fallback(settings):
     assert calls == ["/api/v1/images"]
 
 
+# -- video clips -------------------------------------------------------------------------
+
+
+def fake_video_api(script):
+    """MockTransport for /videos: `script` maps a model id to "ok", "refuse" or "fail"."""
+    calls = []
+
+    def handler(request: httpx.Request):
+        path = request.url.path
+        calls.append((request.method, request.url.host, path, request.headers.get("authorization")))
+        if request.method == "POST":
+            body = json.loads(request.content)
+            outcome = script[body["model"]]
+            if outcome == "refuse":
+                return httpx.Response(400, json={"error": {"message": "The input image may contain real person"}})
+            job = body["model"].split("/")[-1]
+            return httpx.Response(202, json={"id": job, "polling_url": f"https://openrouter.test/api/v1/videos/{job}", "status": "pending"})
+        if path.endswith("/content") or request.url.host == "cdn.example":
+            return httpx.Response(200, content=b"MP4DATA", headers={"content-type": "video/mp4"})
+        job = path.rsplit("/", 1)[-1]
+        model = next(m for m in script if m.endswith(job))
+        if script[model] == "fail":
+            return httpx.Response(200, json={"id": job, "polling_url": path, "status": "failed", "error": "moderation"})
+        return httpx.Response(200, json={
+            "id": job, "polling_url": path, "status": "completed", "usage": {"cost": 0.06},
+            "unsigned_urls": [f"https://openrouter.test/api/v1/videos/{job}/content?index=0"],
+        })
+
+    return handler, calls
+
+
+def video_ai(settings, handler):
+    keyed = replace(settings, openrouter_api_key="sk-test")
+    return VideoAI(keyed, httpx.AsyncClient(transport=httpx.MockTransport(handler)), poll_interval=0)
+
+
+def test_video_job_is_submitted_polled_and_downloaded(settings):
+    bodies = []
+    handler, calls = fake_video_api({"bytedance/seedance-1-5-pro": "ok", "x-ai/grok-imagine-video-1.5-lite": "ok"})
+
+    def spy(request):
+        if request.method == "POST":
+            bodies.append(json.loads(request.content))
+        return handler(request)
+
+    clip = run(video_ai(settings, spy).animate(jpeg(), "they wave", "3:4"))
+    assert (clip.data, clip.model, clip.cost) == (b"MP4DATA", "bytedance/seedance-1-5-pro", 0.06)
+    body = bodies[0]
+    assert body["duration"] == 5 and body["resolution"] == "720p" and body["aspect_ratio"] == "3:4"
+    assert body["generate_audio"] is False
+    frame = body["frame_images"][0]
+    assert frame["frame_type"] == "first_frame" and frame["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert [c[0] for c in calls] == ["POST", "GET", "GET"]
+    assert all(auth == "Bearer sk-test" for *_, auth in calls)
+
+
+def test_video_falls_back_when_a_model_refuses_real_people(settings):
+    handler, calls = fake_video_api({"bytedance/seedance-1-5-pro": "refuse", "x-ai/grok-imagine-video-1.5-lite": "ok"})
+    clip = run(video_ai(settings, handler).animate(jpeg(), "p", "16:9"))
+    assert clip.model == "x-ai/grok-imagine-video-1.5-lite"
+    assert [c[0] for c in calls] == ["POST", "POST", "GET", "GET"]
+
+
+def test_video_reports_every_model_when_all_fail(settings):
+    handler, _ = fake_video_api({"bytedance/seedance-1-5-pro": "refuse", "x-ai/grok-imagine-video-1.5-lite": "fail"})
+    with pytest.raises(AIError) as exc:
+        run(video_ai(settings, handler).animate(jpeg(), "p", "16:9"))
+    assert "real person" in str(exc.value) and "moderation" in str(exc.value)
+
+
+def test_video_download_never_sends_the_key_elsewhere(settings):
+    handler, calls = fake_video_api({"bytedance/seedance-1-5-pro": "ok", "x-ai/grok-imagine-video-1.5-lite": "ok"})
+
+    def cdn(request):
+        response = handler(request)
+        if request.method == "GET" and request.url.host == "openrouter.test" and not request.url.path.endswith("/content"):
+            data = response.json()
+            data["unsigned_urls"] = ["https://cdn.example/clip.mp4"]
+            return httpx.Response(200, json=data)
+        return response
+
+    run(video_ai(settings, cdn).animate(jpeg(), "p", "16:9"))
+    assert [auth for _, host, _, auth in calls if host == "cdn.example"] == [None]
+
+
+def test_before_after_gif():
+    data = make_reveal_gif(jpeg(1600, 900, (10, 10, 10)), jpeg(1600, 900, (250, 250, 250)))
+    gif = Image.open(io.BytesIO(data))
+    assert gif.format == "GIF" and gif.size == (480, 270) and gif.n_frames > 10
+    assert gif.info["loop"] == 0
+
+
 # -- printing ------------------------------------------------------------------------------
 
 
@@ -158,7 +256,7 @@ def test_print_is_4x6_at_300dpi(orientation, size):
 def client(settings):
     ai = ImageAI(settings)
     ai.mock_delay = 0
-    with TestClient(create_app(settings, ai)) as c:
+    with TestClient(create_app(settings, ai, VideoAI(settings, poll_interval=0))) as c:
         yield c
 
 
@@ -330,7 +428,8 @@ def test_theme_samples(client):
         op.send_json({"type": "set_sample", "photo_id": photo_id})
         state = receive_until(op, lambda m: m["type"] == "state" and m["samples"]["winter"])
         assert client.get(state["samples"]["winter"]).headers["content-type"] == "image/jpeg"
-        assert state["samples"]["sun"] is None
+        assert state["samples"]["winter"].startswith("/samples/")  # made in the app beats the built-in one
+        assert state["samples"]["sun"] == "/static/samples/sun.jpg"  # built-in default from static/samples
 
         op.send_json({"type": "make_samples", "photo_id": photo_id})
         receive_until(op, is_state(making_samples=True))
@@ -339,6 +438,58 @@ def test_theme_samples(client):
         assert "All theme samples are ready" in receive_until(op, lambda m: m["type"] == "toast")["text"]
 
     assert client.get("/samples/nope.jpg").status_code == 404
+
+
+def test_video_clip_and_gif_for_a_photo(client):
+    headers = {"X-Booth-Pin": PIN}
+    with connect(client, "operator") as op:
+        welcome(op)
+        photo_id = client.post("/api/capture", headers=headers, files={"photo": ("c.jpg", jpeg(1920, 1080))}).json()["id"]
+        photo = receive_until(op, is_state(phase="result"))["photo"]
+        assert photo["video_url"] is None
+
+        gif = client.get(photo["reveal_url"])
+        assert gif.headers["content-type"] == "image/gif"
+        assert Image.open(io.BytesIO(gif.content)).n_frames > 10
+
+        op.send_json({"type": "make_video", "photo_id": photo_id})
+        receive_until(op, lambda m: m["type"] == "photo" and m["photo"]["video_status"] == "processing")
+        done = receive_until(op, lambda m: m["type"] == "state" and m["photo"]["video_status"] == "done")["photo"]
+        assert done["video_model"] == "mock"
+
+        # iPhones fetch video in byte ranges.
+        part = client.get(done["video_url"], headers={"Range": "bytes=0-99"})
+        assert part.status_code == 206 and part.headers["content-type"] == "video/mp4" and len(part.content) == 100
+        assert done["video_url"] in client.get(f"/p/{photo_id}").text
+
+        # Restyling makes the old clip stale.
+        op.send_json({"type": "regenerate", "photo_id": photo_id})
+        restyled = receive_until(op, lambda m: m["type"] == "state" and m["photo"]["version"] == 2 and m["phase"] == "result")
+        assert restyled["photo"]["video_status"] == "" and restyled["photo"]["video_url"] is None
+
+
+def test_auto_video_makes_a_clip_for_every_photo(client):
+    with connect(client, "operator") as op:
+        welcome(op)
+        op.send_json({"type": "prefs", "prefs": {"auto_video": True}})
+        receive_until(op, lambda m: m["type"] == "state" and m["prefs"]["auto_video"])
+        client.post("/api/capture", headers={"X-Booth-Pin": PIN}, files={"photo": ("c.jpg", jpeg())})
+        receive_until(op, lambda m: m["type"] == "state" and m["photo"] and m["photo"]["video_status"] == "done", limit=80)
+
+
+def test_restart_recovers_interrupted_work(settings):
+    from app.storage import PhotoStore
+
+    store = PhotoStore(settings.data_dir)
+    rec = store.create(jpeg(), "winter", "", "landscape")
+    rec.status, rec.video_status = "done", "processing"
+    store.save(rec)
+    stuck = store.create(jpeg(), "winter", "", "landscape")  # left "processing"
+
+    with TestClient(create_app(settings)):
+        pass
+    assert store.get(rec.id).video_status == "error"
+    assert store.get(stuck.id).status == "error"
 
 
 def test_bad_uploads_and_unknown_photos(client):

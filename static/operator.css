@@ -59,6 +59,9 @@ body[data-stage="photo-processing"] .o-busy,
 body[data-stage="photo-error"] .o-err,
 body[data-phase="countdown"] .o-count.ticking { opacity: 1; visibility: visible; }
 body[data-stage="photo-processing"] #still { filter: blur(8px) brightness(.6); }
+#stage-gif, #stage-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; background: #000; }
+body[data-stage="photo-done"][data-view="gif"] #stage-gif,
+body[data-stage="photo-done"][data-view="video"] #stage-video { display: block; }
 
 .o-placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center; gap: 8px; padding: 24px; background: radial-gradient(circle at 50% 35%, #232736, #0b0c10 75%); }
 .o-ph-emoji { font-size: 56px; }
@@ -76,8 +79,12 @@ body[data-stage="photo-processing"] #still { filter: blur(8px) brightness(.6); }
 }
 .o-caption #caption-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .o-mini { min-height: 34px; padding: 0 12px; font-size: 13px; border-radius: 10px; }
+.o-views { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: rgba(255, 255, 255, .1); flex: none; }
+.o-views button { border: 0; background: transparent; color: var(--muted); font: 600 13px var(--font); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.o-views button[aria-pressed="true"] { background: rgba(255, 255, 255, .18); color: #fff; }
+.o-views button:disabled { opacity: .35; cursor: default; }
 
-.o-actions { display: grid; grid-template-columns: 1.6fr repeat(4, 1fr); gap: 10px; }
+.o-actions { display: grid; grid-template-columns: 1.5fr repeat(5, 1fr); gap: 10px; }
 .o-actions .btn { min-width: 0; padding: 0 10px; }
 .o-actions .btn:not(.o-shoot) { flex-direction: column; gap: 4px; font-size: 15px; }
 .o-actions .btn:not(.o-shoot) .ico { font-size: 24px; }
@@ -139,7 +146,7 @@ body[data-stage="photo-processing"] #still { filter: blur(8px) brightness(.6); }
   .o-theme-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 150px; overflow-x: auto; overflow-y: hidden; }
   .o-prompt { display: none; }
   body.custom-theme .o-prompt { display: grid; }
-  .o-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .o-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .o-shoot { grid-column: 1 / -1; }
   .chip-ai { display: none; }
   .o-print-body, .o-send-body { grid-template-columns: 1fr; }

@@ -1,6 +1,6 @@
 import {
   $, $$, Camera, PreviewStreamer, RemotePreview, Sharer, api, applyThemeColors, askPin, aspectFor,
-  connect, ensurePin, forgetPin, getPin, keepAwake, loadThemes, printPhoto, printUrlFor, store, toast,
+  connect, ensurePin, forgetPin, getPin, keepAwake, loadThemes, printPhoto, shareEntries, store, toast,
   uploadPhoto,
 } from "/static/common.js";
 
@@ -13,6 +13,8 @@ const els = {
   video: $("#video"),
   remote: $("#remote"),
   still: $("#still"),
+  clip: $("#clip"),
+  before: $("#before"),
   count: $("#count"),
   flash: $("#flash"),
   procText: $("#proc-text"),
@@ -40,6 +42,7 @@ let carouselKey = "";
 let wantPreview = false;
 let localQr = null; // photo whose QR the host chose to show from this iPad
 let dismissedQr = null;
+let revealedKey = null; // photo id + version whose before/after wipe already played
 
 await ensurePin();
 themes = await loadThemes();
@@ -70,7 +73,12 @@ const link = connect(
     },
     countdown: runCountdown,
     frame: (blob) => remote.show(blob),
-    photo: () => els.host.open && renderHost(),
+    photo(msg) {
+      if (!els.host.open) return;
+      hostPhotos = hostPhotos.map((p) => (p.id === msg.photo.id ? msg.photo : p));
+      if (hostPhoto?.id === msg.photo.id) hostPhoto = msg.photo;
+      renderHost();
+    },
     toast(msg) {
       toast(msg.text, msg.level);
     },
@@ -153,11 +161,16 @@ function render() {
 
   if (phase === "processing") {
     setStill(localCapture || photo?.original_url);
+    if (photo) els.before.src = photo.original_url; // preload for the reveal
     startProcessingMessages(name);
   } else {
     stopProcessingMessages();
   }
-  if (phase === "result" && photo?.result_url) setStill(photo.result_url);
+  if (phase === "result" && photo?.result_url) {
+    setStill(photo.result_url);
+    playReveal(photo);
+  }
+  renderClip(phase === "result" ? photo : null);
 
   renderQr();
 }
@@ -171,6 +184,45 @@ function attractText(cameraHere) {
 function setStill(src) {
   if (src && els.still.dataset.src !== src) els.still.src = els.still.dataset.src = src;
 }
+
+/** Wipe from the real photo to the AI version, once per new result. */
+function playReveal(photo) {
+  const key = `${photo.id}:${photo.version}`;
+  if (revealedKey === key) return;
+  revealedKey = key;
+  els.before.src = photo.original_url;
+  els.body.classList.remove("revealing");
+  void els.body.offsetWidth;
+  els.body.classList.add("revealing");
+  setTimeout(() => els.body.classList.remove("revealing"), 2300);
+}
+
+/** Loop the video clip over the photo once it's ready. */
+function renderClip(photo) {
+  const url = photo?.video_url || "";
+  $("#video-note").hidden = photo?.video_status !== "processing";
+  if (els.clip.dataset.src === url) return;
+  els.clip.dataset.src = url;
+  els.body.classList.remove("has-clip");
+  $("#play-clip").hidden = true;
+  if (!url) {
+    els.clip.removeAttribute("src");
+    els.clip.load();
+    return;
+  }
+  els.clip.src = url;
+  els.clip.play().catch(() => {});
+  // iPads in Low Power Mode don't autoplay video; offer a button instead.
+  setTimeout(() => {
+    const stuck = els.clip.dataset.src === url && !els.body.classList.contains("has-clip") && !els.clip.error;
+    $("#play-clip").hidden = !stuck;
+  }, 2500);
+}
+els.clip.addEventListener("playing", () => {
+  els.body.classList.add("has-clip");
+  $("#play-clip").hidden = true;
+});
+$("#play-clip").addEventListener("click", () => els.clip.play().catch(() => {}));
 
 function clearLocalCapture() {
   if (localCapture) URL.revokeObjectURL(localCapture);
@@ -429,7 +481,11 @@ function renderHost() {
   if (photo) $("#host-photo").src = photo.result_url;
   for (const id of ["#host-print", "#host-airdrop", "#host-qr"]) $(id).disabled = !photo;
   $("#host-airdrop").hidden = !sharer.supported;
-  if (photo) sharer.prepare(photo, printUrlFor(photo, state.prefs));
+  if (photo) sharer.prepare(shareEntries(photo, state.prefs));
+  const video = photo?.video_status;
+  $("#host-video").disabled = !photo || video === "processing";
+  $("#host-video").lastElementChild.textContent =
+    { processing: "Making video…", done: "Make a new video", error: "Retry video" }[video] || "Make video";
 
   const strip = $("#host-strip");
   strip.innerHTML = "";
@@ -458,6 +514,9 @@ $("#host-airdrop").addEventListener("click", async () => {
   } catch (err) {
     toast(`Couldn't share: ${err.message}`, "error");
   }
+});
+$("#host-video").addEventListener("click", () => {
+  if (hostPhoto) link.send({ type: "make_video", pin: hostPin, photo_id: hostPhoto.id });
 });
 $("#host-qr").addEventListener("click", () => {
   localQr = hostPhoto;

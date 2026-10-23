@@ -11,6 +11,9 @@ from pathlib import Path
 log = logging.getLogger("funbooth")
 
 DEFAULT_MODEL = "bytedance-seed/seedream-5-0-flash"
+# Tried in order. Seedance 2.x refuses photos of real people, so 1.5 Pro leads, with Grok
+# Imagine as the fallback (both verified with photo booth pictures).
+DEFAULT_VIDEO_MODELS = "bytedance/seedance-1-5-pro,x-ai/grok-imagine-video-1.5-lite"
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
@@ -24,6 +27,10 @@ class Settings:
     api_mode: str
     resolution: str
     timeout_seconds: float
+    video_models: tuple[str, ...]
+    video_resolution: str
+    video_seconds: int
+    video_timeout_seconds: float
     booth_pin: str
     default_event_name: str
     data_dir: Path
@@ -58,6 +65,10 @@ def load_settings() -> Settings:
         api_mode=os.getenv("OPENROUTER_API_MODE", "auto").strip().lower(),
         resolution=os.getenv("OPENROUTER_RESOLUTION", "2K").strip(),
         timeout_seconds=float(os.getenv("OPENROUTER_TIMEOUT", "120")),
+        video_models=tuple(m.strip() for m in os.getenv("OPENROUTER_VIDEO_MODELS", DEFAULT_VIDEO_MODELS).split(",") if m.strip()),
+        video_resolution=os.getenv("OPENROUTER_VIDEO_RESOLUTION", "720p").strip(),
+        video_seconds=int(os.getenv("OPENROUTER_VIDEO_SECONDS", "5")),
+        video_timeout_seconds=float(os.getenv("OPENROUTER_VIDEO_TIMEOUT", "600")),
         booth_pin=pin,
         default_event_name=os.getenv("EVENT_NAME", "Fun Booth").strip(),
         data_dir=Path(os.getenv("DATA_DIR", "./data")).resolve(),

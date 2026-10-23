@@ -29,6 +29,14 @@ class PhotoRecord:
     status: str = "processing"  # processing | done | error
     error: str = ""
     version: int = 0  # bumped on every (re)generation so browsers refetch
+    video_status: str = ""  # "" (none) | processing | done | error
+    video_error: str = ""
+    video_model: str = ""
+    video_cost: float | None = None
+    video_version: int = 0
+
+    def clear_video(self) -> None:
+        self.video_status, self.video_error, self.video_model, self.video_cost = "", "", "", None
 
     def public(self) -> dict:
         v = self.version
@@ -38,6 +46,8 @@ class PhotoRecord:
             "thumb_url": f"/media/{self.id}/thumb.jpg?v={v}-{self.status}",
             "result_url": f"/media/{self.id}/result.jpg?v={v}" if self.status == "done" else None,
             "print_url": f"/media/{self.id}/print.jpg?v={v}" if self.status == "done" else None,
+            "reveal_url": f"/media/{self.id}/reveal.gif?v={v}" if self.status == "done" else None,
+            "video_url": f"/media/{self.id}/clip.mp4?v={self.video_version}" if self.video_status == "done" else None,
             "share_path": f"/p/{self.id}",
             "qr_url": f"/qr/{self.id}.svg",
         }
@@ -73,6 +83,9 @@ class PhotoStore:
 
     def path(self, photo_id: str, kind: str) -> Path:
         return self._dir(photo_id) / f"{kind}.jpg"
+
+    def file(self, photo_id: str, name: str) -> Path:
+        return self._dir(photo_id) / name
 
     def create(self, original_jpeg: bytes, theme_id: str, custom_prompt: str, orientation: str) -> PhotoRecord:
         rec = PhotoRecord(

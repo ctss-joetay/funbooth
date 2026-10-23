@@ -2,8 +2,9 @@
 
 An AI photo booth that runs in the browser on iPads, iPhones and laptops. Guests swipe
 through themes with sample pictures, pick one and strike a pose. The AI (ByteDance
-**Seedream 5.0 Flash** via OpenRouter) restyles them into the theme. Only the operator
-can print the photo or send it to guests.
+**Seedream 5.0 Flash** via OpenRouter) restyles them into the theme. Every photo also
+gets a free **before/after GIF**, and the operator can turn any photo into a short
+**AI video clip**. Only the operator can print or send photos, GIFs and clips to guests.
 
 **Themes included:** Winter Wonderland · Holidays in the Sun · Music Festival ·
 Lunar New Year · Festival of Lights · Christmas Cheer · Totally 80s · 90s Throwback ·
@@ -55,18 +56,44 @@ guests still see themselves while posing.
    - **Send:** shows a QR code guests scan from the operator screen, AirDrop where the
      browser supports it, **Show QR on guest screen**, or downloads (handy on a laptop).
    - **Restyle:** re-runs the selected photo with another theme.
+   - **🎬 Video:** animates the selected photo into a short clip (see below).
+
+## Before/after GIFs and video clips
+
+- **Before/after GIF (free, instant):** the server makes it with Pillow. The real photo
+  wipes across into the AI version, holds, and loops (480 px, about 0.5 MB). The guest
+  screen plays the same wipe when a result appears. It's included in Send, the QR
+  download page and AirDrop.
+- **Video clip:** tap **🎬 Video** on the operator, or the host menu on a one-iPad booth.
+  To make one for every photo, turn on **Settings → Make a video clip of every photo
+  automatically**. The finished photo becomes the first frame of a 5-second clip, with
+  a motion prompt per theme (snow falling, lanterns swaying, neon pulsing…). The clip
+  loops on the guest screen when it's ready, and goes out through QR, AirDrop and
+  downloads like the photos. If an iPad is in Low Power Mode and won't autoplay, a
+  **▶ Watch your video** button appears.
+- **Models** are tried in the order given in `OPENROUTER_VIDEO_MODELS`:
+  - **Seedance 1.5 Pro** comes first. Tested with booth photos: 720p in ~65 s for
+    **$0.13**, or 480p in ~40 s for $0.06.
+  - **Grok Imagine Video 1.5 Lite** is the fallback. Tested: 480p in ~30 s for $0.11.
+  - If a model refuses a photo or has been retired, the next one is used automatically.
+  - **Seedance 2.x is deliberately left out:** ByteDance rejects image-to-video for
+    photos that look like real people (`InputImageSensitiveContentDetected.PrivacyInformation`),
+    which is every booth photo.
+- Clips are H.264 MP4 at about 2 MB a second. They play on iPhone, iPad, Android and
+  desktop browsers.
 
 ## Theme samples
 
-The carousel shows an illustrated card for each theme until it has a sample picture.
-To add samples:
+The app ships with real samples in `static/samples/`. They were made by Seedream from a
+demo photo of four fictional guests (`_original.jpg`) restyled into every theme. To
+replace them:
 - **⭐ Use as theme sample:** on any finished photo in the operator view.
 - **Settings → Make samples for every theme from the selected photo:** restyles one
   good shot (e.g. your team) in every theme. This is one AI image per theme, ~10 in total.
-- **Built-in defaults:** run `OPENROUTER_API_KEY=... python scripts/make_samples.py`. It
-  creates a demo photo of fictional guests, restyles it in every theme and saves
-  `static/samples/<theme id>.jpg`. Add `--photo team.jpg` to use your own photo instead.
-  Commit the files to ship them with the app. Samples made in the app take priority.
+- **Regenerate the built-in set:** run `OPENROUTER_API_KEY=... python scripts/make_samples.py`.
+  It creates a new demo group and restyles it in every theme. Add `--photo team.jpg`
+  to use your own photo, and set `OPENROUTER_RESOLUTION=1K` to keep it cheap. Commit
+  the files to ship them. Samples made in the app take priority over the built-in ones.
 
 ## Run it locally (no API key needed)
 
@@ -113,6 +140,10 @@ Keep the service at **one replica**: the live booth state is held in memory.
 | `OPENROUTER_API_MODE` | `auto` | `images` (unified `/images` API), `chat` (`/chat/completions` with image output), or `auto` (try `/images`, fall back to chat) |
 | `OPENROUTER_RESOLUTION` | `2K` | `1K` is cheaper and faster; `2K` prints sharper. Empty uses the model default |
 | `OPENROUTER_TIMEOUT` | `120` | Seconds to wait for the AI |
+| `OPENROUTER_VIDEO_MODELS` | `bytedance/seedance-1-5-pro,x-ai/grok-imagine-video-1.5-lite` | Video models to try, in order |
+| `OPENROUTER_VIDEO_RESOLUTION` | `720p` | `480p` roughly halves the clip cost |
+| `OPENROUTER_VIDEO_SECONDS` | `5` | Clip length (both default models accept 4–12 s) |
+| `OPENROUTER_VIDEO_TIMEOUT` | `600` | Seconds to wait for a clip |
 | `TIMEZONE` | `UTC` | Time zone for the date on prints |
 | `DATA_DIR` | `/data` in Docker | Where photos are stored (mount a volume here) |
 | `PUBLIC_URL` | Railway domain | Override the URL used in QR codes, e.g. for a custom domain |
@@ -162,7 +193,7 @@ maker's iPad app.
 ## Sending photos: AirDrop, QR and Bluetooth
 
 Guests can't print or download from the guest screen by themselves. The operator sends
-each photo:
+each photo, along with its before/after GIF and video clip:
 - **QR code:** shown in the operator's Send dialog for the guest to scan, or pushed
   to the guest screen with **Show QR on guest screen**. Any phone works, Android
   included.
@@ -194,6 +225,10 @@ written. Check the model page for current pricing and for any surcharge on 2K ou
 Each **Restyle** is another generation. **Make samples** creates one per theme (10 in
 total), and the **Test AI connection** button makes one.
 
+Video clips cost more: about **$0.13** for a 5-second 720p clip with Seedance 1.5 Pro
+(measured), or $0.06 at 480p. The operator caption shows each clip's actual cost. The
+before/after GIF is free.
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -202,6 +237,8 @@ total), and the **Test AI connection** button makes one.
 | Take photo is greyed out | The chosen camera isn't ready. Check the camera chip on the operator screen, start the camera on that device, or pick another one in Settings. |
 | Guests don't see themselves | The live preview comes from the camera device, so check that device is online and its camera is running. |
 | AI errors | Use **Test AI connection** to see the exact OpenRouter error. 401 means a bad key; 402 means you're out of credits. If `/images` is rejected, `auto` mode switches to chat completions on its own. You can force it with `OPENROUTER_API_MODE=chat`. |
+| Video failed | Hover or long-press 🎬 for OpenRouter's reason. A model that refuses the photo is skipped automatically. If they all refuse, try another photo or change `OPENROUTER_VIDEO_MODELS`. |
+| Video doesn't play on the guest screen | Low Power Mode blocks autoplay. Tap **▶ Watch your video**, or turn Low Power Mode off. |
 | Photos vanish after deploy | Mount a Railway volume at `/data`. |
 | Print isn't 4×6 | Choose the 4×6 paper size in the AirPrint options. The image is already 1800×1200 px at 300 dpi. |
 
@@ -212,13 +249,16 @@ app/
   main.py       FastAPI routes, WebSocket, media, QR and guest pages
   booth.py      live state machine (countdown → capture → AI → result), device roles,
                 guest permissions, preview relay, theme samples
-  ai.py         OpenRouter client (Seedream), auto fallback, mock mode
+  ai.py         OpenRouter image client (Seedream), auto fallback, mock mode
+  video.py      OpenRouter video client (submit → poll → download), model fallback
+  reveal.py     before/after GIF
   printing.py   4×6" print layout with Pillow (frame, event name, date, QR)
   themes.py     theme list and prompts
   storage.py    photos on disk
   config.py     environment settings
 static/         guest screen, operator, camera, guest download and landing pages
                 (plain HTML/CSS/JS, no build step); static/samples/ for default samples
-tests/          pytest suite (AI requests, print layout, booth flow, guest permissions,
-                phone camera + preview relay, samples)
+scripts/        make_samples.py: generate the built-in theme samples with the real model
+tests/          pytest suite (AI image + video requests, GIF, print layout, booth flow,
+                guest permissions, phone camera + preview relay, samples, restart recovery)
 ```

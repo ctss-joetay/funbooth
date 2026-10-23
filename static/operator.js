@@ -1,6 +1,6 @@
 import {
   $, $$, Camera, PreviewStreamer, Sharer, api, aspectFor, connect, ensurePin, forgetPin, loadThemes,
-  printPhoto, printUrlFor, store, toast, uploadPhoto,
+  printPhoto, printUrlFor, shareEntries, store, toast, uploadPhoto,
 } from "/static/common.js";
 
 const FACING_KEY = "funbooth.operator.facing";
@@ -28,7 +28,10 @@ const els = {
   restyle: $("#restyle"),
   print: $("#print"),
   send: $("#send"),
+  makeVideo: $("#make-video"),
   next: $("#next"),
+  stageGif: $("#stage-gif"),
+  stageVideo: $("#stage-video"),
 };
 
 const camera = new Camera(els.video);
@@ -44,6 +47,7 @@ let localCapture = null;
 let countdownTimer = null;
 let selectedId = null; // photo the Print / Send / Restyle buttons act on
 let pinned = false; // operator tapped a thumbnail, so show it instead of the live camera
+let view = "photo"; // what the stage shows for a finished photo: photo | gif | video
 let lastBoothPhotoId = null;
 
 await ensurePin();
@@ -67,7 +71,10 @@ const link = connect(
       if (state.phase === "countdown" || (state.phase === "idle" && previous?.phase !== "idle")) pinned = false;
       if (state.photo) {
         upsertPhoto(state.photo);
-        if (state.photo.id !== lastBoothPhotoId) selectedId = state.photo.id; // follow new shots
+        if (state.photo.id !== lastBoothPhotoId) {
+          selectedId = state.photo.id; // follow new shots
+          view = "photo";
+        }
       }
       lastBoothPhotoId = state.photo?.id ?? lastBoothPhotoId;
       render();
@@ -166,6 +173,7 @@ function render() {
   els.body.dataset.stage = stage;
   if (photo?.status === "processing") setStill(photo.id === state.photo?.id && localCapture ? localCapture : photo.original_url);
   if (photo?.status === "done") setStill(photo.result_url);
+  renderMediaView(photo);
   $("#err-text").textContent = photo?.error || "Something went wrong.";
   $("#phase-label").textContent = GUEST_SCREEN[phase] || phase;
   renderPlaceholder(prefs, devices);
@@ -180,8 +188,9 @@ function render() {
   els.print.disabled = !done;
   els.send.disabled = !done;
   els.next.disabled = phase === "idle";
+  renderVideoButton(photo);
 
-  if (done) sharer.prepare(photo, printUrlFor(photo, prefs)).then(renderSend);
+  if (done && els.sendDialog.open) sharer.prepare(shareEntries(photo, prefs)).then(renderSend);
   renderSend();
   syncSettings();
   markCurrentThumb();
@@ -228,9 +237,46 @@ function renderCaption(photo, live) {
   const theme = themes[photo.theme_id];
   const time = new Date(photo.created_at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const status = { processing: " · creating…", error: " · failed" }[photo.status] || "";
-  $("#caption-text").textContent = `${theme?.emoji ?? ""} ${theme?.name ?? ""} · ${time}${status}`;
+  const cost = photo.video_cost ? ` $${photo.video_cost.toFixed(2)}` : "";
+  const video = { processing: " · 🎬 making video…", done: ` · 🎬${cost}`, error: " · 🎬 video failed" }[photo.video_status] || "";
+  $("#caption-text").textContent = `${theme?.emoji ?? ""} ${theme?.name ?? ""} · ${time}${status}${video}`;
+  $("#caption-text").title = photo.video_status === "error" ? photo.video_error : photo.video_model || "";
+  $("#views").hidden = photo.status !== "done";
   $("#set-sample").hidden = photo.status !== "done" || photo.theme_id === "custom";
 }
+
+// Photo / before-after GIF / video clip on the stage.
+function renderMediaView(photo) {
+  if (view === "video" && !photo?.video_url) view = "photo";
+  els.body.dataset.view = view;
+  $$("#views button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.view === view));
+    b.disabled = b.dataset.view === "video" && !photo?.video_url;
+  });
+  if (view === "gif" && photo?.reveal_url && els.stageGif.dataset.src !== photo.reveal_url) {
+    els.stageGif.src = els.stageGif.dataset.src = photo.reveal_url;
+  }
+  if (view === "video" && els.stageVideo.dataset.src !== photo.video_url) {
+    els.stageVideo.src = els.stageVideo.dataset.src = photo.video_url;
+    els.stageVideo.play().catch(() => {});
+  }
+  if (view !== "video") els.stageVideo.pause();
+}
+
+function renderVideoButton(photo) {
+  const label = els.makeVideo.lastElementChild;
+  const status = photo?.status === "done" ? photo.video_status : "unavailable";
+  els.makeVideo.disabled = status === "unavailable" || status === "processing";
+  label.textContent = { processing: "Making…", done: "Play video", error: "Retry video" }[status] || "Video";
+  els.makeVideo.title = status === "error" ? photo.video_error : "Turn this photo into a short video clip";
+}
+
+$$("#views button").forEach((b) =>
+  b.addEventListener("click", () => {
+    view = b.dataset.view;
+    render();
+  }),
+);
 
 function setStill(src) {
   if (src && els.still.dataset.src !== src) els.still.src = els.still.dataset.src = src;
@@ -311,6 +357,17 @@ els.restyle.addEventListener("click", () => {
   if (selectedId) link.send({ type: "regenerate", photo_id: selectedId });
 });
 $("#set-sample").addEventListener("click", () => link.send({ type: "set_sample", photo_id: selectedId }));
+els.makeVideo.addEventListener("click", videoAction);
+function videoAction() {
+  const photo = selected();
+  if (photo?.status !== "done" || photo.video_status === "processing") return;
+  if (photo.video_status === "done") {
+    view = "video";
+    render();
+  } else {
+    link.send({ type: "make_video", photo_id: photo.id });
+  }
+}
 
 els.print.addEventListener("click", openPrint);
 function openPrint() {
@@ -334,6 +391,7 @@ function openSend() {
   if (photo?.status !== "done") return;
   renderSend();
   els.sendDialog.showModal();
+  sharer.prepare(shareEntries(photo, state.prefs)).then(renderSend);
 }
 function renderSend() {
   const photo = selected();
@@ -343,6 +401,13 @@ function renderSend() {
   $("#send-download").download = `funbooth-${photo.id.slice(0, 8)}.jpg`;
   $("#send-download-print").href = printUrlFor(photo, state.prefs);
   $("#send-download-print").download = `funbooth-${photo.id.slice(0, 8)}-print.jpg`;
+  $("#send-download-gif").href = photo.reveal_url;
+  $("#send-download-gif").download = `funbooth-${photo.id.slice(0, 8)}-before-after.gif`;
+  $("#send-download-video").hidden = !photo.video_url;
+  if (photo.video_url) {
+    $("#send-download-video").href = photo.video_url;
+    $("#send-download-video").download = `funbooth-${photo.id.slice(0, 8)}.mp4`;
+  }
   $("#send-airdrop").hidden = !sharer.supported;
   $("#send-airdrop").disabled = !sharer.ready;
   const onGuest = state.qr?.id === photo.id;
@@ -370,6 +435,7 @@ document.addEventListener("keydown", (e) => {
   if (key === " " && !els.shoot.disabled) link.send({ type: "start" });
   else if (key === "p") openPrint();
   else if (key === "s") openSend();
+  else if (key === "v") videoAction();
   else if (key === "n" && !els.next.disabled) link.send({ type: "reset" });
   else return;
   e.preventDefault();
@@ -408,6 +474,7 @@ function renderGallery() {
       btn.addEventListener("click", () => {
         selectedId = photo.id;
         pinned = true;
+        view = "photo";
         render();
       });
       thumbs.set(photo.id, btn);

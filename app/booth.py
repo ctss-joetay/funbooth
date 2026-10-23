@@ -27,7 +27,8 @@ from .ai import AIError, ImageAI
 from .config import STATIC_DIR, Settings
 from .printing import LAYOUTS, layout_for
 from .storage import PhotoRecord, PhotoStore, normalize_jpeg
-from .themes import CUSTOM_THEME, THEMES, build_prompt, get_theme
+from .themes import CUSTOM_THEME, THEMES, build_prompt, build_video_prompt, get_theme
+from .video import VideoAI
 
 log = logging.getLogger("funbooth.booth")
 
@@ -37,6 +38,7 @@ THEME_IDS = {t.id for t in THEMES} | {CUSTOM_THEME.id}
 GUEST_THEME_IDS = [t.id for t in THEMES]  # Custom needs a typed prompt, so it's operator-only
 CAPTURE_GRACE_SECONDS = 20  # how long after the countdown we wait for the photo upload
 MAX_PARALLEL_AI = 3
+MAX_PARALLEL_VIDEO = 2
 SAMPLE_SIZE = 1024
 MAX_PREVIEW_FRAME = 400_000
 
@@ -52,6 +54,7 @@ class Prefs:
     countdown: int = 3
     orientation: str = "landscape"  # print layout: landscape (6x4) | portrait (4x6)
     print_qr: bool = True  # QR code on the printed photo
+    auto_video: bool = False  # make a video clip of every finished photo (costs per clip)
     guest_themes: list[str] = field(default_factory=lambda: list(GUEST_THEME_IDS))
 
     def update(self, data: dict) -> None:
@@ -70,8 +73,9 @@ class Prefs:
                 pass
         if data.get("orientation") in LAYOUTS:
             self.orientation = data["orientation"]
-        if "print_qr" in data:
-            self.print_qr = bool(data["print_qr"])
+        for key in ("print_qr", "auto_video"):
+            if key in data:
+                setattr(self, key, bool(data[key]))
         if isinstance(data.get("guest_themes"), list):
             chosen = [t for t in GUEST_THEME_IDS if t in data["guest_themes"]]
             if chosen:  # guests always need at least one theme
@@ -90,9 +94,10 @@ class Client:
 
 
 class Booth:
-    def __init__(self, settings: Settings, ai: ImageAI):
+    def __init__(self, settings: Settings, ai: ImageAI, video_ai: VideoAI):
         self.settings = settings
         self.ai = ai
+        self.video_ai = video_ai
         self.store = PhotoStore(settings.data_dir)
         self._prefs_path = settings.data_dir / "prefs.json"
         self.prefs = self._load_prefs()
@@ -108,6 +113,7 @@ class Booth:
 
         self._countdown_seq = 0
         self._ai_slots = asyncio.Semaphore(MAX_PARALLEL_AI)
+        self._video_slots = asyncio.Semaphore(MAX_PARALLEL_VIDEO)
         self._tasks: set[asyncio.Task] = set()
         self._making_samples = False
 
@@ -276,6 +282,8 @@ class Booth:
             await self.set_sample(photo_id, client.id)
         elif kind == "make_samples":
             await self.make_samples(photo_id, client.id)
+        elif kind == "make_video":
+            await self.make_video(photo_id, client.id)
 
     # -- booth actions --------------------------------------------------------------------
 
@@ -325,6 +333,7 @@ class Booth:
             return
         rec.theme_id, rec.custom_prompt = self.prefs.theme_id, self.prefs.custom_prompt
         rec.status, rec.error = "processing", ""
+        rec.clear_video()  # the old clip shows the old theme
         self.store.save(rec)
         self.current, self.qr_photo = rec, None
         self.phase, self.message = "processing", ""
@@ -429,6 +438,71 @@ class Booth:
             self.message = rec.error
             await self.broadcast_state()
         await self.broadcast({"type": "photo", "photo": rec.public()})
+        if rec.status == "done" and self.prefs.auto_video:
+            await self.make_video(rec.id)
+
+    # -- video clips ----------------------------------------------------------------------
+
+    async def make_video(self, photo_id: str, client_id: str | None = None) -> None:
+        """Animate a finished photo into a short clip (a few minutes at most, runs in the background)."""
+        rec = self.store.get(photo_id)
+        if not rec or rec.status != "done":
+            if client_id:
+                await self.toast(client_id, "Pick a finished photo first.")
+            return
+        if rec.video_status == "processing":
+            return
+        rec.clear_video()
+        rec.video_status = "processing"
+        self.store.save(rec)
+        await self._photo_changed(rec)
+        self._spawn(self._make_video(rec.id))
+
+    async def _make_video(self, photo_id: str) -> None:
+        rec = self.store.get(photo_id)
+        theme = get_theme(rec.theme_id)
+        ratio = layout_for(rec.orientation)["ai_ratio"]
+        try:
+            still = self.store.path(rec.id, "result").read_bytes()
+            async with self._video_slots:
+                clip = await self.video_ai.animate(still, build_video_prompt(theme), ratio)
+            self.store.file(rec.id, "clip.mp4").write_bytes(clip.data)
+            error, model, cost = "", clip.model, clip.cost
+        except AIError as exc:
+            error, model, cost = str(exc), "", None
+        except Exception:
+            log.exception("video failed for %s", photo_id)
+            error, model, cost = "Something went wrong while making the video.", "", None
+
+        rec = self.store.get(photo_id) or rec  # reload: the photo may have changed meanwhile
+        if rec.video_status != "processing":
+            return  # restyled while we were busy; this clip is stale
+        rec.video_status = "error" if error else "done"
+        rec.video_error, rec.video_model, rec.video_cost = error, model, cost
+        if not error:
+            rec.video_version += 1
+        self.store.save(rec)
+        if error:
+            log.warning("video for %s failed: %s", photo_id, error)
+            await self.notify_operators(f"Video failed: {error}", "error")
+        await self._photo_changed(rec)
+
+    async def _photo_changed(self, rec: PhotoRecord) -> None:
+        if self.current and self.current.id == rec.id:
+            self.current = rec
+            await self.broadcast_state()
+        await self.broadcast({"type": "photo", "photo": rec.public()})
+
+    async def recover(self) -> None:
+        """After a restart, nothing is still working on 'processing' photos or clips."""
+        for rec in await asyncio.to_thread(self.store.recent, 500):
+            changed = False
+            if rec.status == "processing":
+                rec.status, rec.error, changed = "error", "Interrupted by a server restart. Tap Restyle.", True
+            if rec.video_status == "processing":
+                rec.video_status, rec.video_error, changed = "error", "Interrupted by a server restart.", True
+            if changed:
+                self.store.save(rec)
 
     def _spawn(self, coro) -> None:
         task = asyncio.create_task(coro)
@@ -439,3 +513,4 @@ class Booth:
         for task in list(self._tasks):
             task.cancel()
         await self.ai.aclose()
+        await self.video_ai.aclose()

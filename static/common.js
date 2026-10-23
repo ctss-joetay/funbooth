@@ -355,16 +355,16 @@ export class Sharer {
     return !!navigator.canShare;
   }
 
-  async prepare(photo, printUrl) {
-    const key = photo ? `${photo.id}:${photo.version}:${printUrl}` : null;
+  /** `entries` is a list of {url, name, type}; see shareEntries(). */
+  async prepare(entries) {
+    const key = JSON.stringify(entries.map((e) => e.url));
     if (key === this.key) return;
     this.key = key;
     this.files = null;
-    if (!photo?.result_url || !this.supported) return;
+    if (!entries.length || !this.supported) return;
     try {
-      const stem = `funbooth-${photo.id.slice(0, 8)}`;
-      const [plain, framed] = await Promise.all([fetchFile(photo.result_url, `${stem}.jpg`), fetchFile(printUrl, `${stem}-print.jpg`)]);
-      if (this.key === key) this.files = [framed, plain];
+      const files = await Promise.all(entries.map((e) => fetchFile(e)));
+      if (this.key === key) this.files = files;
     } catch {
       this.files = null;
     }
@@ -385,10 +385,22 @@ export class Sharer {
   }
 }
 
-async function fetchFile(url, name) {
+async function fetchFile({ url, name, type }) {
   const res = await fetch(url);
   if (!res.ok) throw new Error("download failed");
-  return new File([await res.blob()], name, { type: "image/jpeg" });
+  return new File([await res.blob()], name, { type });
+}
+
+/** Everything a guest gets for one photo: framed print, plain photo, before/after GIF, video. */
+export function shareEntries(photo, prefs) {
+  const stem = `funbooth-${photo.id.slice(0, 8)}`;
+  const entries = [
+    { url: printUrlFor(photo, prefs), name: `${stem}-print.jpg`, type: "image/jpeg" },
+    { url: photo.result_url, name: `${stem}.jpg`, type: "image/jpeg" },
+    { url: photo.reveal_url, name: `${stem}-before-after.gif`, type: "image/gif" },
+  ];
+  if (photo.video_url) entries.push({ url: photo.video_url, name: `${stem}.mp4`, type: "video/mp4" });
+  return entries;
 }
 
 let toastTimer;

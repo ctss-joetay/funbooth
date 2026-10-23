@@ -42,6 +42,8 @@
         <div class="o-frame" id="frame">
           <video id="video" playsinline muted autoplay></video>
           <img id="still" alt="">
+          <img id="stage-gif" alt="">
+          <video id="stage-video" muted loop playsinline></video>
           <div class="o-placeholder" id="placeholder">
             <div class="o-ph-emoji" id="ph-emoji">🖥️</div>
             <div class="o-ph-title" id="ph-title"></div>
@@ -53,7 +55,12 @@
           <div class="o-phase" id="phase-label">Guest screen: choosing a theme</div>
           <div class="o-caption" id="caption">
             <span id="caption-text"></span>
-            <button class="btn o-mini" id="set-sample" title="Show this photo as the theme's sample on the guest screen">⭐ Use as theme sample</button>
+            <div class="o-views" id="views">
+              <button type="button" data-view="photo">Photo</button>
+              <button type="button" data-view="gif">Before/after</button>
+              <button type="button" data-view="video">Video</button>
+            </div>
+            <button class="btn o-mini" id="set-sample" title="Show this photo as the theme's sample on the guest screen">⭐ Sample</button>
           </div>
         </div>
       </div>
@@ -63,6 +70,7 @@
         <button class="btn btn-big" id="restyle"><span class="ico">🔁</span><span>Restyle</span></button>
         <button class="btn btn-big" id="print"><span class="ico">🖨️</span><span>Print</span></button>
         <button class="btn btn-big" id="send"><span class="ico">📤</span><span>Send</span></button>
+        <button class="btn btn-big" id="make-video"><span class="ico">🎬</span><span>Video</span></button>
         <button class="btn btn-big" id="next"><span class="ico">⏭️</span><span>Next guest</span></button>
       </div>
     </section>
@@ -72,7 +80,7 @@
     <div class="o-gallery-head">
       <h2 class="o-h">Recent photos</h2>
       <span class="o-muted">Tap one to print or send it</span>
-      <span class="o-muted o-keys">Keys: Space take photo · P print · S send · N next guest</span>
+      <span class="o-muted o-keys">Keys: Space take photo · P print · S send · V video · N next guest</span>
     </div>
     <div class="o-strip" id="strip"><div class="o-empty">Photos you take will appear here.</div></div>
   </footer>
@@ -96,7 +104,7 @@
     <div class="o-send-body">
       <div class="o-send-qr">
         <img id="send-qr" alt="QR code to download the photo">
-        <p>Guests scan this with their phone camera to download the photo.</p>
+        <p>Guests scan this with their phone camera to download the photo, the before/after GIF and the video.</p>
       </div>
       <div class="o-send-side">
         <h2>Send photo</h2>
@@ -104,6 +112,8 @@
         <button class="btn btn-big" id="send-guest-qr"><span class="ico">🖥️</span><span>Show QR on guest screen</span></button>
         <a class="btn btn-big" id="send-download" download><span class="ico">⬇️</span><span>Download photo</span></a>
         <a class="btn btn-big" id="send-download-print" download><span class="ico">🖼️</span><span>Download framed print</span></a>
+        <a class="btn btn-big" id="send-download-gif" download><span class="ico">✨</span><span>Download before/after GIF</span></a>
+        <a class="btn btn-big" id="send-download-video" download><span class="ico">🎬</span><span>Download video</span></a>
         <button class="btn btn-big btn-ghost" id="close-send">Close</button>
       </div>
     </div>
@@ -154,6 +164,10 @@
       </div>
 
       <label class="switch">QR code on prints <input type="checkbox" data-pref="print_qr"></label>
+      <div class="field">
+        <label class="switch">Make a video clip of every photo automatically <input type="checkbox" data-pref="auto_video"></label>
+        <span class="o-field-hint">Each 5-second clip costs roughly $0.06–0.15 and takes about a minute. Otherwise tap 🎬 Video on the photos you want.</span>
+      </div>
 
       <div class="field">Themes guests can choose
         <div class="o-chips" id="guest-themes"></div>

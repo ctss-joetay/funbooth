@@ -43,6 +43,9 @@
         <video id="video" playsinline muted autoplay></video>
         <img id="remote" alt="">
         <img id="still" alt="">
+        <video id="clip" muted loop playsinline></video>
+        <img id="before" alt="">
+        <div class="d-wipe"></div>
         <div class="d-attract" id="attract">
           <div class="d-attract-emoji" id="attract-emoji"></div>
           <div class="d-attract-title" id="attract-title"></div>
@@ -66,6 +69,8 @@
     <aside class="d-side">
       <div class="d-side-title">Looking good! ✨</div>
       <p class="d-side-text">Ask the booth host to print or send your photo.</p>
+      <p class="d-side-video" id="video-note" hidden>🎬 Making your video… stay for the show!</p>
+      <button class="btn btn-big d-btn-light" id="play-clip" hidden><span class="ico">▶️</span><span>Watch your video</span></button>
       <button class="btn btn-big d-btn-light" id="again"><span class="ico">📸</span><span>Take another</span></button>
       <button class="btn btn-big d-btn-ghost" id="done"><span class="ico">✨</span><span>New theme</span></button>
     </aside>
@@ -126,6 +131,7 @@
           <button class="btn btn-primary btn-big" id="host-print"><span class="ico">🖨️</span><span>Print</span></button>
           <button class="btn btn-big" id="host-airdrop"><span class="ico">📲</span><span>AirDrop</span></button>
           <button class="btn btn-big" id="host-qr"><span class="ico">🔳</span><span>Show QR to guest</span></button>
+          <button class="btn btn-big" id="host-video"><span class="ico">🎬</span><span>Make video</span></button>
         </div>
       </div>
       <div class="d-host-section">

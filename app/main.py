@@ -27,8 +27,10 @@ from .ai import AIError, ImageAI
 from .booth import ROLES, Booth
 from .config import STATIC_DIR, Settings, load_settings
 from .printing import compose_print
+from .reveal import make_reveal_gif
 from .storage import normalize_jpeg, valid_id
 from .themes import all_themes, get_theme
+from .video import VideoAI
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("funbooth")
@@ -45,15 +47,16 @@ def _timezone() -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
-def create_app(settings: Settings | None = None, ai: ImageAI | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, ai: ImageAI | None = None, video_ai: VideoAI | None = None) -> FastAPI:
     settings = settings or load_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
-    booth = Booth(settings, ai or ImageAI(settings))
+    booth = Booth(settings, ai or ImageAI(settings), video_ai or VideoAI(settings))
     tz = _timezone()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         log.info("Fun Booth ready. AI: %s. Data: %s", booth.ai.mode_label, settings.data_dir)
+        await booth.recover()
         yield
         await booth.shutdown()
 
@@ -174,6 +177,22 @@ def create_app(settings: Settings | None = None, ai: ImageAI | None = None) -> F
             return Response(data, media_type="image/jpeg", headers=no_store)
         raise HTTPException(status_code=404)
 
+    @app.get("/media/{photo_id}/reveal.gif", include_in_schema=False)
+    async def reveal_gif(photo_id: str):
+        rec = get_photo(photo_id)
+        if rec.status != "done":
+            raise HTTPException(status_code=404, detail="Photo is not ready yet")
+        return Response(await asyncio.to_thread(_reveal_gif, booth, rec), media_type="image/gif", headers=cache_forever)
+
+    @app.get("/media/{photo_id}/clip.mp4", include_in_schema=False)
+    async def video_clip(photo_id: str):
+        rec = get_photo(photo_id)
+        path = booth.store.file(rec.id, "clip.mp4")
+        if rec.video_status != "done" or not path.exists():
+            raise HTTPException(status_code=404, detail="No video for this photo")
+        # FileResponse answers Range requests, which iPhone video playback needs.
+        return FileResponse(path, media_type="video/mp4", headers=cache_forever)
+
     @app.get("/samples/{theme_id}.jpg", include_in_schema=False)
     async def sample(theme_id: str):
         path = booth.sample_path(theme_id) if theme_id in booth.samples else None
@@ -198,6 +217,9 @@ def create_app(settings: Settings | None = None, ai: ImageAI | None = None) -> F
             "ready": rec.status == "done",
             "result_url": f"/media/{rec.id}/result.jpg?v={rec.version}",
             "print_url": f"/media/{rec.id}/print.jpg?v={rec.version}",
+            "reveal_url": f"/media/{rec.id}/reveal.gif?v={rec.version}",
+            "video_url": rec.public()["video_url"],
+            "video_pending": rec.video_status == "processing",
             "file_stem": f"funbooth-{rec.id[:8]}",
         }
         page = page.replace("{{TITLE}}", html.escape(booth.prefs.event_name or "Fun Booth"))
@@ -233,6 +255,15 @@ def create_app(settings: Settings | None = None, ai: ImageAI | None = None) -> F
             await booth.disconnect(client_id)
 
     return app
+
+
+def _reveal_gif(booth: Booth, rec) -> bytes:
+    cached = booth.store.file(rec.id, f"reveal-{rec.version}.gif")
+    if cached.exists():
+        return cached.read_bytes()
+    data = make_reveal_gif(booth.store.path(rec.id, "original").read_bytes(), booth.store.path(rec.id, "result").read_bytes())
+    cached.write_bytes(data)
+    return data
 
 
 def _thumbnail(booth: Booth, rec) -> bytes:
