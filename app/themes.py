@@ -369,6 +369,26 @@ THEMES: list[Theme] = [
         category=DRESS_UP,
     ),
     Theme(
+        id="graduation",
+        name="Graduation Day",
+        emoji="🎓",
+        tagline="Caps in the air",
+        prompt=(
+            "Scene: on location on a real university campus on a sunny graduation day, standing on "
+            "the steps in front of a grand old stone building with tall columns, with green lawns, "
+            "leafy trees and other families celebrating far behind them. Dress every person head to "
+            "toe in graduation attire: flowing black academic gowns with coloured hoods and smart "
+            "clothes and polished shoes underneath, and every one of them wears a square black "
+            "mortarboard cap with a tassel, fully in the frame; some hold "
+            "rolled diplomas tied with ribbon or bouquets of flowers. Bright, warm late-morning "
+            "sunlight with soft shadows, like a proud graduation day photo."
+        ),
+        motion="Tassels sway in the breeze, a few caps fly up into the sky behind them and flower petals drift down.",
+        place=True,
+        frame="#14213d", accent="#fca311", ink="#f5f1e8",
+        category=DRESS_UP,
+    ),
+    Theme(
         id="70s",
         name="70s Disco",
         emoji="🪩",

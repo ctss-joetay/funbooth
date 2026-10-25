@@ -69,7 +69,7 @@ def test_prompts_lock_faces_and_fit_the_place():
     custom = build_prompt(get_theme("custom"), "a pirate ship deck")
     assert custom == IDENTITY_GUARD + FULL_BODY_FRAMING + "a pirate ship deck" + REALISM
     ids = {t.id for t in THEMES}
-    assert {"fashion", "noir", "mountains", "kawaii", "classroom", "paris", "space", "polaroid"} <= ids
+    assert {"fashion", "noir", "mountains", "kawaii", "classroom", "paris", "space", "polaroid", "graduation"} <= ids
     assert not {"lunar", "lights", "xmas"} & ids  # religious festivals are off for now
     assert get_theme("xmas").id == "winter"  # old saved prefs fall back safely
 
