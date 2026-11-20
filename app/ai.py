@@ -47,7 +47,10 @@ def images_payload(model: str, prompt: str, data_url: str | None, aspect_ratio: 
     return payload
 
 
-def chat_payload(model: str, prompt: str, data_url: str | None, aspect_ratio: str) -> dict:
+def chat_payload(model: str, prompt: str, data_url: str | None, aspect_ratio: str, resolution: str = "") -> dict:
+    image_config = {"aspect_ratio": aspect_ratio}
+    if resolution:
+        image_config["image_size"] = resolution
     content = [{"type": "text", "text": prompt}]
     if data_url:
         content.append({"type": "image_url", "image_url": {"url": data_url}})
@@ -55,7 +58,7 @@ def chat_payload(model: str, prompt: str, data_url: str | None, aspect_ratio: st
         "model": model,
         "modalities": ["image", "text"],
         "messages": [{"role": "user", "content": content}],
-        "image_config": {"aspect_ratio": aspect_ratio},
+        "image_config": image_config,
     }
 
 
@@ -158,7 +161,7 @@ class ImageAI:
         raise _ShapeRejected("unrecognised /images response")
 
     async def _via_chat(self, prompt: str, data_url: str | None, aspect_ratio: str) -> bytes:
-        payload = chat_payload(self.settings.model, prompt, data_url, aspect_ratio)
+        payload = chat_payload(self.settings.model, prompt, data_url, aspect_ratio, self.settings.resolution)
         resp = await self._post("/chat/completions", payload)
         if resp.status_code >= 400:
             raise AIError(_error_message(resp))

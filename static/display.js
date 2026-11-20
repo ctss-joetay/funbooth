@@ -180,6 +180,7 @@ function render() {
     playReveal(photo);
   }
   renderClip(phase === "result" ? photo : null);
+  renderSideQr(phase === "result" && prefs.guest_qr ? photo : null);
 
   renderQr();
 }
@@ -204,6 +205,17 @@ function playReveal(photo) {
   void els.body.offsetWidth;
   els.body.classList.add("revealing");
   setTimeout(() => els.body.classList.remove("revealing"), 2300);
+}
+
+/** The download QR beside every finished photo, so guests don't have to ask for it. */
+function renderSideQr(photo) {
+  const show = photo?.status === "done" && !!photo.qr_url;
+  $("#side-qr").hidden = !show;
+  $("#side-text").textContent = show
+    ? "Point your phone camera at the code, or ask the booth host for a print."
+    : "Ask the booth host to print or send your photo.";
+  const img = $("#side-qr-img");
+  if (show && img.dataset.src !== photo.qr_url) img.src = img.dataset.src = photo.qr_url;
 }
 
 /** Loop the video clip over the photo once it's ready. */

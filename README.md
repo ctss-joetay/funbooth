@@ -236,14 +236,18 @@ maker's iPad app.
 
 ## Sending photos: AirDrop, QR and Bluetooth
 
-Guests can't print or download from the guest screen by themselves. The operator sends
-each photo, along with its before/after GIF and video clip:
+Guests can't print from the guest screen by themselves, but they can scan the QR code
+shown beside each finished photo. The operator can also send each photo, along with its
+before/after GIF and video clip:
 - **QR code:** shown in the operator's Send dialog for the guest to scan, or pushed
   to the guest screen with **Show QR on guest screen**. Any phone works, Android
   included.
 - **AirDrop:** from an iPad or Safari on a Mac, the share sheet sends the framed and
   plain photos. AirDrop uses Bluetooth plus Wi-Fi.
 - **Downloads:** saves the plain or framed version, e.g. to email or upload later.
+- **QR on the guest screen** (on by default): every finished photo shows its download
+  QR code beside it on the guest screen, so guests can scan straight away. Turn it off
+  in Settings with **QR on guest screen after each photo**.
 - **QR code on prints** (optional): printed photos carry a QR code to the digital copy.
 
 The browser can't talk to Bluetooth devices directly (iOS doesn't support Web
