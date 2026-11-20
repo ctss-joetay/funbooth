@@ -128,7 +128,7 @@ def test_auto_mode_falls_back_to_chat_and_remembers(settings):
             return httpx.Response(400, json={"error": {"message": "input_references not supported"}})
         body = json.loads(request.content)
         assert body["modalities"] == ["image", "text"]
-        assert body["image_config"] == {"aspect_ratio": "3:4"}
+        assert body["image_config"] == {"aspect_ratio": "3:4", "image_size": "2K"}
         assert body["messages"][0]["content"][1]["image_url"]["url"].startswith("data:image/jpeg")
         return httpx.Response(200, json={"choices": [{"message": {"content": "", "images": [{"type": "image_url", "image_url": {"url": data_url}}]}}]})
 
@@ -602,3 +602,18 @@ def test_bad_uploads_and_unknown_photos(client):
     assert client.get("/media/../../etc/passwd/original.jpg").status_code == 404
     assert client.get("/media/" + "0" * 32 + "/result.jpg").status_code == 404
     assert client.get("/p/nope").status_code == 404
+
+
+def test_guest_qr_pref_is_on_by_default_and_can_be_turned_off(client):
+    with connect(client, "operator") as op:
+        welcome(op)
+        assert receive_until(op, lambda m: m["type"] == "state")["prefs"]["guest_qr"] is True
+        op.send_json({"type": "prefs", "prefs": {"guest_qr": False}})
+        assert receive_until(op, lambda m: m["type"] == "state" and not m["prefs"]["guest_qr"])
+
+
+def test_chat_fallback_keeps_the_resolution():
+    from app.ai import chat_payload
+
+    assert chat_payload("m", "p", None, "16:9", "2K")["image_config"] == {"aspect_ratio": "16:9", "image_size": "2K"}
+    assert chat_payload("m", "p", None, "16:9", "")["image_config"] == {"aspect_ratio": "16:9"}

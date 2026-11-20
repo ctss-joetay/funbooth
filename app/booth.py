@@ -63,6 +63,7 @@ class Prefs:
     countdown: int = 3
     orientation: str = "landscape"  # print layout: landscape (6x4) | portrait (4x6)
     print_qr: bool = True  # QR code on the printed photo
+    guest_qr: bool = True  # download QR on the guest screen beside every finished photo
     auto_video: bool = False  # make a video clip of every finished photo (costs per clip)
     guest_themes: list[str] = field(default_factory=lambda: list(GUEST_THEME_IDS))
 
@@ -95,7 +96,7 @@ class Prefs:
                 pass
         if data.get("orientation") in LAYOUTS:
             self.orientation = data["orientation"]
-        for key in ("print_qr", "auto_video"):
+        for key in ("print_qr", "guest_qr", "auto_video"):
             if key in data:
                 setattr(self, key, bool(data[key]))
         if isinstance(data.get("guest_themes"), list):

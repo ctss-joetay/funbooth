@@ -225,7 +225,7 @@ export class Camera {
     }
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { facingMode: facing, width: { ideal: 2560 }, height: { ideal: 1440 } },
+      video: { facingMode: facing, width: { ideal: 3840 }, height: { ideal: 2160 } },
     });
     const stream = this.stream;
     stream.getVideoTracks()[0]?.addEventListener("ended", () => {

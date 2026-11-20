@@ -70,7 +70,11 @@
 
     <aside class="d-side">
       <div class="d-side-title">Looking good! ✨</div>
-      <p class="d-side-text">Ask the booth host to print or send your photo.</p>
+      <p class="d-side-text" id="side-text">Ask the booth host to print or send your photo.</p>
+      <div class="d-side-qr" id="side-qr" hidden>
+        <img id="side-qr-img" alt="QR code to download your photo">
+        <div class="d-side-qr-label">Scan to get your photo</div>
+      </div>
       <p class="d-side-video" id="video-note" hidden>🎬 Making your video… stay for the show!</p>
       <button class="btn btn-big d-btn-light" id="play-clip" hidden><span class="ico">▶️</span><span>Watch your video</span></button>
       <button class="btn btn-big d-btn-light" id="again"><span class="ico">📸</span><span>Take another</span></button>
